@@ -32,6 +32,12 @@ class Robokassa extends Base
      */
     public $url;
 
+	/**
+	 * Способ оплаты
+	 * @var string
+	 */
+	public $paymentMethod;
+
     /**
      * @param string $id
      * @param integer|double $amount

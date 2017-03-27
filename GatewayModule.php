@@ -157,6 +157,11 @@ class GatewayModule extends Module
 		return $this->expandUrl($this->failureUrl, $order, $gateway);
 	}
 
+	public function hasGateway($name)
+	{
+		return isset($this->gateways[$name]);
+	}
+
     /**
      * @param string $name
      * @return Base

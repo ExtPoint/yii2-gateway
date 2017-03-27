@@ -10,6 +10,7 @@ class m170327_105415_init_orders_and_gateways extends Migration
 
     	$this->createTable('gateways_orders', [
     		'id' => 'pk',
+    		// Suggested // 'userId' => 'int NOT NULL',
     		'state' => "enum('ready', 'complete', 'cancelled') NOT NULL DEFAULT 'ready'",
     		'initialAmount' => $this->money($moneyPrecision)->notNull()->defaultValue(0),
     		'recurringAmount' => $this->money($moneyPrecision)->notNull()->defaultValue(0),
@@ -30,7 +31,7 @@ class m170327_105415_init_orders_and_gateways extends Migration
     		'kind' => $this->string(32)->notNull(), /* Or:
  				enum('subscriptionStarted', 'subscriptionUpdated', 'subscriptionCancelled', 'paymentReceived',
  					'paymentRefunded', 'payoffMade', 'invoiceCreated', 'invoiceUpdated', 'invoiceDeleted',
- 					'invoicePaid', 'invoiceFailed', 'generic'
+ 					'invoicePaid', 'invoiceFailed', 'orderCheck', 'generic'
  				) NOT NULL
  			*/
     		'orderId' => $this->integer()->null(),

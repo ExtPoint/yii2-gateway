@@ -24,6 +24,7 @@ abstract class TransactionKind
 	const INVOICE_FAILED = 'invoiceFailed';
 
 	// Log everything
+	const ORDER_CHECK = 'orderCheck'; // Very common action
 	const GENERIC_EVENT = 'generic';
 
 	// TODO: Use better enum

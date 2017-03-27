@@ -6,8 +6,10 @@ use gateway\exceptions\FeatureNotSupportedByGatewayException;
 use gateway\exceptions\InvalidDatabaseStateException;
 use gateway\GatewayModule;
 use gateway\models\Order;
+use gateway\models\Transaction;
 use yii\base\InvalidConfigException;
 use yii\base\Object;
+use yii\helpers\Html;
 use yii\helpers\Url;
 use yii\log\Logger;
 use yii\web\Response;
@@ -23,12 +25,6 @@ abstract class Base extends Object
      * @var boolean
      */
     public $enable = true;
-
-    /**
-     * Способ оплаты. Поле актуально только для платёжных интеграторов, где есть выбор способа оплаты.
-     * @var string|null
-     */
-    public $paymentMethod = null;
 
     /**
      * Флаг, отображающий включен ли платёжный шлюз для реальных транзакций.
@@ -78,7 +74,7 @@ abstract class Base extends Object
 
     /**
 	 * @param int $logId
-	 * @return Response|string
+	 * @return Response|string|mixed
      */
     abstract public function callback($logId);
 
@@ -94,7 +90,34 @@ abstract class Base extends Object
 	}
 
 	/**
-	 * @param Order|null $order Anonymous gateways (e.g. bitaps.com) supports custom callback URLs
+	 * @param Order $order
+	 * @return string
+	 */
+	public function getSiteUrl($order)
+	{
+    	return $this->module->getEffectiveSiteUrl($order, $this);
+	}
+
+	/**
+	 * @param Order $order
+	 * @return string
+	 */
+	public function getSuccessUrl($order)
+	{
+    	return $this->module->getEffectiveSuccessUrl($order, $this);
+	}
+
+	/**
+	 * @param Order $order
+	 * @return string
+	 */
+	public function getFailureUrl($order)
+	{
+    	return $this->module->getEffectiveFailureUrl($order, $this);
+	}
+
+	/**
+	 * @param Order|null $order Anonymous gateways (e.g. bitaps.com) support custom callback URLs
 	 * @return string
 	 * @throws InvalidConfigException
 	 */
@@ -125,12 +148,79 @@ abstract class Base extends Object
     }
 
 	/**
+	 * Redirects the browser to the specified URL.
+	 * This method is a shortcut to [[Response::redirect()]].
+	 *
+	 * You can use it in an action by returning the [[Response]] directly:
+	 *
+	 * ```php
+	 * // stop executing this action and redirect to login page
+	 * return $this->redirect(['login']);
+	 * ```
+	 *
+	 * @param string|array $url the URL to be redirected to. This can be in one of the following formats:
+	 *
+	 * - a string representing a URL (e.g. "http://example.com")
+	 * - a string representing a URL alias (e.g. "@example.com")
+	 * - an array in the format of `[$route, ...name-value pairs...]` (e.g. `['site/index', 'ref' => 1]`)
+	 *   [[Url::to()]] will be used to convert the array into a URL.
+	 *
+	 * Any relative URL will be converted into an absolute one by prepending it with the host info
+	 * of the current request.
+	 *
+	 * @param int $statusCode the HTTP status code. Defaults to 302.
+	 * See <http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html>
+	 * for details about HTTP status code
+	 * @return Response the current response object
+	 */
+	public function redirect($url, $statusCode = 302)
+	{
+		return \Yii::$app->getResponse()->redirect(Url::to($url), $statusCode);
+	}
+
+	/**
+	 * @param string $url
+	 * @param string[] $postFields
+	 * @return string|Response
+	 */
+	public function redirectPost($url, $postFields)
+	{
+		$formId = __CLASS__;
+
+		$result = Html::tag(
+			'div',
+			htmlspecialchars(\Yii::t('yii2-gateways', 'Opening payment form, please wait')),
+			['class' => 'alert alert-info']
+		);
+
+		$result .= Html::beginForm($url, 'post', ['id' => $formId]);
+
+		foreach ($postFields as $field => $value) {
+			$result .= Html::hiddenInput($field, $value);
+		}
+
+		$result .= Html::endForm();
+		$result .= "<script>\ndocument.getElementById('$formId').submit();\n</script>";
+
+		return $result;
+	}
+
+	/**
+	 * @param \Throwable $e
+	 * @return Response|string|mixed|null null = unsupported
+	 */
+	public function getResponseFromException(\Throwable $e)
+	{
+		return null;
+	}
+
+	/**
 	 * @param string $orderId
 	 * @return Order
 	 * @throws InvalidConfigException
 	 * @throws InvalidDatabaseStateException
 	 */
-    protected function getOrderById($orderId)
+    public function getOrderById($orderId)
 	{
         $orderClassName = $this->module->orderClassName;
 		$order = $orderClassName::findOne((string)$orderId);
@@ -141,4 +231,53 @@ abstract class Base extends Object
 
         return $order;
     }
+
+	/**
+	 * @param string $kind
+	 * @param string $orderId
+	 * @param string $logId
+	 * @return Transaction
+	 */
+    public function prepareTransaction($kind, $orderId, $logId)
+	{
+		$transactionClassName = $this->module->transactionClassName;
+
+		/** @var Transaction $transaction */
+		$transaction = new $transactionClassName();
+		$transaction->kind = $kind;
+		$transaction->orderId = $orderId;
+		$transaction->logId = $logId;
+
+		return $transaction;
+	}
+
+	/**
+	 * Shortcut
+	 * @param string $kind
+	 * @param string $orderId
+	 * @param string $logId
+	 * @param string|null $notes
+	 * @param float|null $sum
+	 * @param string|null $externalEventId
+	 * @param string|null $externalSubscriptionId
+	 * @param string|null $externalInvoiceId
+	 * @param array $gatewayExtra
+	 */
+    public function logTransaction($kind, $orderId, $logId, $notes = null, $sum = null, $externalEventId = null,
+								   $externalSubscriptionId = null, $externalInvoiceId = null, $gatewayExtra = [])
+	{
+		/** @var Transaction $transaction */
+		$transaction = $this->prepareTransaction($kind, $orderId, $logId);
+
+		$transaction->notes = $notes;
+		$transaction->sum = $sum;
+		$transaction->externalEventId = $externalEventId;
+		$transaction->externalSubscriptionId = $externalSubscriptionId;
+		$transaction->externalInvoiceId = $externalInvoiceId;
+		if ($gatewayExtra) {
+			$transaction->gatewayExtra = $gatewayExtra;
+		}
+
+		GatewayModule::saveOrPanic($transaction);
+	}
 }

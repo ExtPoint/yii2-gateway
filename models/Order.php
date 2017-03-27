@@ -3,7 +3,9 @@ namespace gateway\models;
 
 use gateway\enums\OrderState;
 use gateway\enums\RecurringPeriodName;
+use gateway\enums\TransactionKind;
 use gateway\exceptions\GatewayException;
+use gateway\GatewayModule;
 use yii\db\ActiveRecord;
 
 /**
@@ -23,6 +25,7 @@ use yii\db\ActiveRecord;
  * @property int $trialDays
  * @property float $gatewayInitialAmount
  * @property float $gatewayRecurringAmount
+ * @property string|null $gatewayPaymentMethod
  *
  * Dynamic attributes and properties
  * @property string[] $gatewayParams
@@ -47,6 +50,17 @@ abstract class Order extends ActiveRecord
 			['state', function() {
 				if ($this->isAttributeChanged('state') && $this->getOldAttribute('state') !== OrderState::READY) {
 					$this->addError('state', \Yii::t('yii2-gateways', 'Order cannot be reverted from terminal states'));
+				}
+				elseif (!$this->hasErrors('state')) {
+					$sum = 0;
+					foreach ($this->transactions as $transaction) {
+						if ($transaction->kind === TransactionKind::PAYMENT_RECEIVED) {
+							$sum += $transaction->sum;
+						}
+					}
+					if ($this->gatewayInitialAmount > $sum + 0.0001) {
+						$this->addError('state', \Yii::t('yii2-gateways', 'Payment transactions mismatch the sum'));
+					}
 				}
 			}],
 			['initialAmount', function() {
@@ -120,5 +134,19 @@ abstract class Order extends ActiveRecord
 	public function getGatewayRecurringAmount()
 	{
 		return $this->recurringAmount;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getGatewayPaymentMethod()
+	{
+		return null;
+	}
+
+	public function markComplete()
+	{
+		$this->state = OrderState::COMPLETE;
+		GatewayModule::saveOrPanic($this);
 	}
 }

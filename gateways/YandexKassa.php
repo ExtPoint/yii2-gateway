@@ -2,14 +2,9 @@
 
 namespace gateway\gateways;
 
+use gateway\enums\TransactionKind;
 use Yii;
-use gateway\enums\Result;
-use gateway\enums\OrderState;
 use gateway\exceptions\GatewayException;
-use gateway\exceptions\InvalidArgumentException;
-use gateway\exceptions\SignatureMismatchRequestException;
-use gateway\models\Process;
-use gateway\models\Request;
 use yii\web\Response;
 
 class YandexKassa extends Base
@@ -39,55 +34,62 @@ class YandexKassa extends Base
     public $url;
 
     /**
-     * @param string $id
-     * @param integer|double $amount
-     * @param string $description
-     * @param array $params
-     * @return \gateway\models\Process
-     * @throws \gateway\exceptions\ProcessException
-     * @throws GatewayException
+     * @var string
+	 * @see https://tech.yandex.ru/money/doc/payment-solution/reference/payment-type-codes-docpage/
      */
-    public function start($id, $amount, $description, $params)
-    {
-        if (!isset($params['userId'])) {
-            throw new GatewayException('Param userId is required for gateway `' . __CLASS__ . '`.');
-        }
-
-        // Remote url
-        $url = $this->url ?: ($this->testMode ? 'https://demomoney.yandex.ru/eshop.xml' : 'https://money.yandex.ru/eshop.xml');
-
-        return new Process([
-            'state' => OrderState::WAIT_VERIFICATION,
-            'result' => Result::SUCCEED,
-            'request' => new Request([
-                'url' => $url,
-                'method' => 'post',
-                'params' => [
-                    'shopId' => $this->shopId,
-                    'scid' => $this->scId,
-                    'sum' => number_format((float)$amount, 2, '.', ''),
-                    'customerNumber' => $params['userId'],
-                    'cps_email' => isset($params['email']) ? $params['email'] : '',
-                    'cps_phone' => isset($params['phone']) ? $params['phone'] : '',
-                    'paymentType' => isset($params['paymentType']) ? $params['paymentType'] : '', // See https://tech.yandex.ru/money/doc/payment-solution/reference/payment-type-codes-docpage/
-                    'orderNumber' => $id,
-                    'shopSuccessURL' => $this->getSuccessUrl(),
-                    'shopFailURL' => $this->getFailureUrl(),
-                ],
-            ])
-        ]);
-    }
+    public $defaultPaymentMethod = 'AC'; // AC = Банковская карта
 
     /**
-     * @param Request $request
-     * @return Process
+     * @var string
+     */
+    public $orderUserIdProperty = 'userId';
+
+    /**
+     * @var string|null
+     */
+    public $orderEmailProperty = null;
+
+    /**
+     * @var string|null
+     */
+    public $orderPhoneProperty = null;
+
+
+    protected function internalStart($order)
+	{
+		if (!$order->hasProperty($this->orderUserIdProperty)) {
+			throw new GatewayException('User ID attribute is required for gateway "' . __CLASS__ . '".');
+		}
+
+		// Remote url
+		$url = $this->url ?: ($this->testMode ? 'https://demomoney.yandex.ru/eshop.xml' : 'https://money.yandex.ru/eshop.xml');
+
+		return $this->redirectPost(
+			$url,
+			[
+				'shopId' => $this->shopId,
+				'scid' => $this->scId,
+				'sum' => number_format((float)$order->gatewayInitialAmount, 2, '.', ''),
+				'customerNumber' => $order->{$this->orderUserIdProperty},
+				'cps_email' => $this->orderEmailProperty ? $order->{$this->orderEmailProperty} : '',
+				'cps_phone' => $this->orderPhoneProperty ? $order->{$this->orderPhoneProperty} : '',
+				// See https://tech.yandex.ru/money/doc/payment-solution/reference/payment-type-codes-docpage/
+				'paymentType' => $order->gatewayPaymentMethod !== null ? $order->gatewayPaymentMethod : $this->defaultPaymentMethod,
+				'orderNumber' => $order->id,
+				'shopSuccessURL' => $this->getSuccessUrl($order),
+				'shopFailURL' => $this->getFailureUrl($order),
+			]
+		);
+	}
+
+    /**
+     * @param int $logId
+     * @return Response|mixed
      * @see https://tech.yandex.ru/money/doc/payment-solution/payment-notifications/payment-notifications-check-docpage/
      * @see https://tech.yandex.ru/money/doc/payment-solution/payment-notifications/payment-notifications-aviso-docpage/
      * @see https://tech.yandex.ru/money/doc/payment-solution/payment-notifications/payment-notifications-cancel-docpage/
-     * @throws InvalidArgumentException
-     * @throws SignatureMismatchRequestException
      */
-    public function callback(Request $request)
+    public function callback($logId)
     {
         // Check required params
         $requiredParams = [
@@ -98,83 +100,66 @@ class YandexKassa extends Base
             'invoiceId',
             'customerNumber',
         ];
-        if (!$request->hasParams($requiredParams)) {
-            return new Process([
-                'result' => Result::ERROR,
-                'responseText' => $this->getXml($request, 200),
-            ]);
+        
+        $post = Yii::$app->request->post();
+        if (count(array_intersect_key($post, $requiredParams)) != count($requiredParams)) {
+            return $this->getXml(200);
         }
 
         // Check md5 signature
         $md5 = md5(implode(';', [
-            $request->params['action'],
-            $request->params['orderSumAmount'],
-            $request->params['orderSumCurrencyPaycash'],
-            $request->params['orderSumBankPaycash'],
+            $post['action'],
+            $post['orderSumAmount'],
+            $post['orderSumCurrencyPaycash'],
+            $post['orderSumBankPaycash'],
             $this->shopId,
-            $request->params['invoiceId'],
-            $request->params['customerNumber'],
+            $post['invoiceId'],
+            $post['customerNumber'],
             $this->password,
         ]));
-        $remoteMD5 = strtolower($request->params['md5']);
+        $remoteMD5 = strtolower($post['md5']);
         if ($md5 !== $remoteMD5) {
-            return new Process([
-                'result' => Result::ERROR,
-                'responseText' => $this->getXml($request, 1),
-            ]);
+            return $this->getXml(1);
         }
 
-        // Find state
-        $state = $this->getOrderById($request->params['orderNumber']);
+        // Find order
+        $order = $this->getOrderById($post['orderNumber']);
 
-        switch ($request->params['action']) {
+        // Validate order sum
+        if (abs($order->gatewayInitialAmount - $post['orderSumAmount']) > 0.001) {
+        	return $this->getXml(1);
+		}
+
+		// Send success
+        switch ($post['action']) {
             case 'checkOrder':
-                // Check order exists and state
-                if ($state === null || $state !== OrderState::WAIT_VERIFICATION) {
-                    return new Process([
-                        'result' => Result::ERROR,
-                        'responseText' => $this->getXml($request, 100),
-                    ]);
-                }
-
-                return new Process([
-                    'state' => OrderState::WAIT_RESULT,
-                    'result' => Result::SUCCEED,
-                    'outsideTransactionId' => (string) $request->params['invoiceId'],
-                    'responseText' => $this->getXml($request, 0),
-                ]);
+            	$this->logTransaction(TransactionKind::ORDER_CHECK, $order->id, $logId, null, $post['orderSumAmount']);
+            	return $this->getXml(0);
 
             case 'paymentAviso':
-                // Check order exists and state
-                if ($state === null || !in_array($state, [OrderState::WAIT_VERIFICATION, OrderState::WAIT_RESULT])) {
-                    return new Process([
-                        'result' => Result::ERROR,
-                        'responseText' => $this->getXml($request, 100),
-                    ]);
-                }
-
-                return new Process([
-                    'state' => OrderState::COMPLETE,
-                    'result' => Result::SUCCEED,
-                    'outsideTransactionId' => (string) $request->params['invoiceId'],
-                    'responseText' => $this->getXml($request, 0),
-                ]);
+				$this->logTransaction(TransactionKind::PAYMENT_RECEIVED, $order->id, $logId, null, $post['orderSumAmount']);
+				$order->markComplete(); // Because sum is already checked
+				return $this->getXml(0);
         }
 
-        // Send success result
-        return new Process([
-            'result' => Result::ERROR,
-            'responseText' => $this->getXml($request, 200),
-        ]);
+        // Send problem
+        return $this->getXml(200);
     }
 
-    protected function getXml(Request $request, $code, $params = [])
+    public function getResponseFromException(\Throwable $e)
+	{
+		return $this->getXml(100);
+	}
+
+	protected function getXml($code, $params = [])
     {
+    	$post = Yii::$app->request->post();
+
         $params = array_merge([
             'code' => $code,
             'shopId' => $this->shopId,
-            'invoiceId' => isset($request->params['invoiceId']) ? $request->params['invoiceId'] : '',
-            'performedDatetime' => isset($request->params['requestDatetime']) ? $request->params['requestDatetime'] : '',
+            'invoiceId' => isset($post['invoiceId']) ? $post['invoiceId'] : '',
+            'performedDatetime' => isset($post['requestDatetime']) ? $post['requestDatetime'] : '',
         ], $params);
 
         $tagAttributes = [];
@@ -182,15 +167,16 @@ class YandexKassa extends Base
             $tagAttributes[] = sprintf('%s="%s"', $name, $value);
         }
 
-        $tag = (!empty($request->params['action']) ? $request->params['action'] : 'checkOrder') . 'Response';
+        $tag = (!empty($post['action']) ? $post['action'] : 'checkOrder') . 'Response';
         $xml = '<?xml version="1.0" encoding="UTF-8"?>';
         $xml .= '<' . $tag . ' ' . implode(' ', $tagAttributes) . '/>';
 
-        // TODO Need this headers? If need - move to Process?
-        Yii::$app->response->format = Response::FORMAT_RAW;
-        Yii::$app->response->headers->set('Content-Type', 'application/xml; charset=' . Yii::$app->charset);
+		$response = new Response();
+		$response->format = Response::FORMAT_RAW;
+		$response->headers->set('Content-Type', 'application/xml; charset=' . Yii::$app->charset);
+		$response->content = $xml;
 
-        return $xml;
+        return $response;
     }
 
 }

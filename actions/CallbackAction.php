@@ -11,9 +11,11 @@ class CallbackAction extends Action
 {
     public function actionCallback($gatewayName)
     {
+    	$module = GatewayModule::getInstance();
+
     	// Start logging
 		/** @var CallbackLogEntry $logEntry */
-		$logEntry = \Yii::createObject(GatewayModule::getInstance()->callbackLogEntryClassName);
+		$logEntry = \Yii::createObject($module->callbackLogEntryClassName);
 		$logEntry->setRequest([
 			'get' => $_GET,
 			'post' => $_POST,
@@ -25,7 +27,7 @@ class CallbackAction extends Action
 		// Execute
 		$failed = false;
 		try {
-			$result = GatewayModule::getInstance()->getGateway($gatewayName)->callback($logEntry->id);
+			$result = $module->getGateway($gatewayName)->callback($logEntry->id);
 		}
 		catch (\Throwable $e) {
 			$failed = true;
@@ -37,9 +39,17 @@ class CallbackAction extends Action
 		GatewayModule::saveOrPanic($logEntry);
 
 		// Escalate result
-        if ($failed) {
-			throw new $result;
+        if (!$failed) {
+			return $result;
 		}
-		return $result;
+		if (
+			$module->hasGateway($gatewayName) &&
+			($result2 = $module->getGateway($gatewayName)->getResponseFromException($result))
+		) {
+			return $result2;
+		}
+
+		// Regular exception flow
+		throw new $result;
     }
 }
