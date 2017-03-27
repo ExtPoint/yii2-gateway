@@ -3,8 +3,8 @@
 namespace gateway\tests\unit;
 
 use gateway\gateways\Robokassa;
-use gateway\models\Process;
-use gateway\models\Request;
+use gateway\models\Order;
+use yii\web\Response;
 
 class RobokassaTest extends \PHPUnit_Framework_TestCase {
 
@@ -13,8 +13,6 @@ class RobokassaTest extends \PHPUnit_Framework_TestCase {
     const ROBOKASSA_PASSWORD_2 = 'password2';
 
     public function testPay() {
-        $id = '15449';
-        $amount = 199;
 
         /*$module = $this->getMock('gateway\GatewayModule', [
             'httpSend',
@@ -38,9 +36,33 @@ class RobokassaTest extends \PHPUnit_Framework_TestCase {
             'testMode' => false,
         ]);
 
-        // Start
-        /** @var Process $process */
-        $process = $gateway->start($id, $amount, 'Test pay', ['Item' => 1]);
+		\Yii::$app = $this->getMock('\StdClass');
+		\Yii::$app->expects( $this->any() )
+			->method('getResponse')
+			->will($this->returnCallback(function () {
+				return new Response();
+			}));
+
+        /** @var Order|\PHPUnit_Framework_MockObject_MockObject $order */
+        $order = $this->getMock('\gateway\models\Order');
+        $order->expects( $this->any() )
+			->method('__get')
+			->will($this->returnCallback(function ($name) {
+				$properties = [
+					'id' => 'theOrderId',
+					'description' => 'the description',
+					'trialDays' => 0,
+					'gatewayRecurringAmount' => 0,
+					'gatewayInitialAmount' => 199,
+					'gatewayParams' => [
+						'theParam1' => 'theValue1',
+					],
+				];
+				return $properties[$name];
+			}));
+
+		// Start
+        $response = $gateway->start($order);
         $this->assertEquals('wait_verification', $process->state);
         $this->assertEquals('succeed', $process->result);
         $this->assertEquals('http://auth.robokassa.ru/Merchant/Index.aspx', $process->request->url);

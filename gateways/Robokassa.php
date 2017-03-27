@@ -2,12 +2,9 @@
 
 namespace gateway\gateways;
 
-use gateway\enums\Result;
-use gateway\enums\OrderState;
 use gateway\exceptions\InvalidArgumentException;
 use gateway\exceptions\SignatureMismatchRequestException;
-use gateway\models\Process;
-use gateway\models\Request;
+use yii\web\Response;
 
 class Robokassa extends Base
 {
@@ -38,67 +35,56 @@ class Robokassa extends Base
 	 */
 	public $paymentMethod;
 
-    /**
-     * @param string $id
-     * @param integer|double $amount
-     * @param string $description
-     * @param array $params
-     * @return \gateway\models\Process
-     * @throws \gateway\exceptions\ProcessException
-     */
-    public function start($id, $amount, $description, $params)
-    {
-        // Additional params
-        $shpParams = [];
-        $shpSignature = '';
-        foreach ($params as $key => $value) {
-            $shpParams['Shp_' . $key] = $value;
-            $shpSignature .= ':Shp_' . $key . '=' . $value;
-        }
+	protected function internalStart($order)
+	{
+		// Additional params
+		$shpParams = [];
+		$shpSignature = '';
+		foreach ($order->gatewayParams as $key => $value) {
+			$shpParams['Shp_' . $key] = $value;
+			$shpSignature .= ':Shp_' . $key . '=' . $value;
+		}
 
-        // Remote url
-        $url = $this->url ?: ($this->testMode ? 'http://test.robokassa.ru/Index.aspx' : 'http://auth.robokassa.ru/Merchant/Index.aspx');
+		// Remote url
+		$url = $this->url ?: ($this->testMode ? 'http://test.robokassa.ru/Index.aspx' : 'http://auth.robokassa.ru/Merchant/Index.aspx');
 
-        return new Process([
-            'state' => OrderState::WAIT_VERIFICATION,
-            'result' => Result::SUCCEED,
-            'request' => new Request([
-                'url' => $url,
-                'params' => array_merge($shpParams, [
-                    'MrchLogin' => $this->login,
-                    'OutSum' => $amount,
-                    'InvId' => $id,
-                    'Desc' => $description,
-                    'SignatureValue' => md5($this->login . ":" . $amount . ":" . $id . ":" . $this->password1 . $shpSignature),
-                    'IncCurrLabel' => $this->paymentMethod,
-                    'Culture' => 'ru',
-                    'Encoding' => 'utf-8',
-                ]),
-            ])
-        ]);
-    }
+		$amount = sprintf('%.2f', $order->gatewayInitialAmount);
+			
+		return $this->redirect($url . '&' . 
+			http_build_query(array_merge($shpParams, [
+				'MrchLogin' => $this->login,
+				'OutSum' => $amount,
+				'InvId' => $order->id,
+				'Desc' => $order->description,
+				'SignatureValue' => md5($this->login . ":" . $amount . ":" . $order->id . ":" . $this->password1 . $shpSignature),
+				'IncCurrLabel' => $this->paymentMethod,
+				'Culture' => 'ru',
+				'Encoding' => 'utf-8',
+			]))
+		);		
+	}
 
-    /**
-     * @param Request $request
-     * @return Process
+	/**
+	 * @param int $logId
+	 * @return Response|string|mixed
      * @throws InvalidArgumentException
      * @throws SignatureMismatchRequestException
      */
-    public function callback(Request $request)
+    public function callback($logId)
     {
+    	$post = \Yii::$app->request->post();
+    	
         // Check required params
-        if (empty($request->params['InvId']) || empty($request->params['SignatureValue'])) {
+        if (empty($post['InvId']) || empty($post['SignatureValue'])) {
             throw new InvalidArgumentException('Invalid request arguments. Need `InvId` and `SignatureValue`.');
         }
 
-        // Find transaction model
-        $transactionId = (int)$request->params['InvId'];
-
-        // @todo check transaction exists
+        // Find order
+        $order = $this->getOrderById($post['InvId']);
 
         // Generate hash sum
-        $md5 = strtoupper(md5($request->params['OutSum'] . ':' . $transactionId . ':' . $this->password2));
-        $remoteMD5 = $request->params['SignatureValue'];
+        $md5 = strtoupper(md5($post['OutSum'] . ':' . $order->id . ':' . $this->password2));
+        $remoteMD5 = $post['SignatureValue'];
 
         // Check md5 hash
         if ($md5 !== $remoteMD5) {
@@ -106,11 +92,7 @@ class Robokassa extends Base
         }
 
         // Send success result
-        return new Process([
-            'state' => OrderState::COMPLETE,
-            'result' => Result::SUCCEED,
-            'responseText' => 'OK' . $transactionId,
-        ]);
+        return 'OK' . $order->id;
     }
 
 }

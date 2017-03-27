@@ -56,7 +56,7 @@ abstract class Base extends Object
 		if ($order->trialDays > 0 && !$this->supportsTrial()) {
 			throw new FeatureNotSupportedByGatewayException('Trials are not supported by ' . static::className());
 		}
-		if ($order->recurringAmount != 0 && !$this->supportsRecurring()) {
+		if ($order->gatewayRecurringAmount != 0 && !$this->supportsRecurring()) {
 			throw new FeatureNotSupportedByGatewayException('Recurring payments are not supported by ' . static::className());
 		}
 
