@@ -4,6 +4,7 @@ namespace gateway\tests\unit;
 
 use gateway\gateways\Robokassa;
 use gateway\models\Order;
+use yii\web\Request;
 use yii\web\Response;
 
 class RobokassaTest extends \PHPUnit_Framework_TestCase {
@@ -36,11 +37,16 @@ class RobokassaTest extends \PHPUnit_Framework_TestCase {
             'testMode' => false,
         ]);
 
-		\Yii::$app = $this->getMock('\StdClass');
+		\Yii::$app = $this->getMock('\yii\web\Application');
 		\Yii::$app->expects( $this->any() )
 			->method('getResponse')
 			->will($this->returnCallback(function () {
 				return new Response();
+			}));
+		\Yii::$app->expects( $this->any() )
+			->method('getRequest')
+			->will($this->returnCallback(function () {
+				return new Request();
 			}));
 
         /** @var Order|\PHPUnit_Framework_MockObject_MockObject $order */
@@ -63,7 +69,7 @@ class RobokassaTest extends \PHPUnit_Framework_TestCase {
 
 		// Start
         $response = $gateway->start($order);
-        $this->assertEquals('wait_verification', $process->state);
+        $this->assertEquals('wait_verification', $response);
         $this->assertEquals('succeed', $process->result);
         $this->assertEquals('http://auth.robokassa.ru/Merchant/Index.aspx', $process->request->url);
 
