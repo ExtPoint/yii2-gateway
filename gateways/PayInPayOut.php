@@ -3,7 +3,7 @@
 namespace gateway\gateways;
 
 use gateway\enums\Result;
-use gateway\enums\State;
+use gateway\enums\OrderState;
 use gateway\exceptions\InvalidArgumentException;
 use gateway\exceptions\SignatureMismatchRequestException;
 use gateway\models\Process;
@@ -93,7 +93,7 @@ class PayInPayOut extends Base
         $params['phone'] = self::normalizePhone($params['phone']);
 
         return new Process([
-            'state' => State::WAIT_VERIFICATION,
+            'state' => OrderState::WAIT_VERIFICATION,
             'result' => Result::SUCCEED,
             'request' => new Request([
                 'url' => self::API_URL,
@@ -165,17 +165,17 @@ class PayInPayOut extends Base
         // Send result
         switch ($request->params['paymentStatus']) {
             case self::PAYMENT_STATUS_QUEUE:
-                $process->state = State::WAIT_RESULT;
+                $process->state = OrderState::WAIT_RESULT;
                 $process->result = Result::SUCCEED;
                 break;
 
             case self::PAYMENT_STATUS_SUCCESS:
-                $process->state = State::COMPLETE;
+                $process->state = OrderState::COMPLETE;
                 $process->result = Result::SUCCEED;
                 break;
 
             case self::PAYMENT_STATUS_FAILURE:
-                $process->state = State::COMPLETE;
+                $process->state = OrderState::COMPLETE;
                 $process->result = Result::FAILED;
                 break;
 

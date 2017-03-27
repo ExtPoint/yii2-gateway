@@ -2,71 +2,55 @@
 
 namespace gateway\controllers;
 
-use gateway\GatewayModule;
-use gateway\models\Request;
-use yii\helpers\ArrayHelper;
-use yii\helpers\Html;
+use gateway\actions\CallbackAction;
 use yii\web\Controller;
 
 class GatewayController extends Controller
 {
-    public $enableCsrfValidation = false;
+    public function beforeAction($action)
+	{
+		// Enable m2m POST requests
+		if ($action instanceof CallbackAction) {
+			$this->enableCsrfValidation = false;
+		}
 
-    public function actionStart($gatewayName, $id, $amount, $description = '', array $params = [])
+		return parent::beforeAction($action);
+	}
+
+	public function actions()
+	{
+		return [
+			'callback' => CallbackAction::className(),
+		];
+	}
+
+	/* Example on how to place an order
+
+    public function actionBuy()
     {
-        $process = GatewayModule::getInstance()->start($gatewayName, $id, $amount, $description, $params);
+    	$order = new Order();
+    	// Fill it somehow
+		$order->saveOrPanic();
 
-        if ($process->request->method === 'get') {
-            return $this->redirect((string)$process->request);
-        } else {
-            $html = '';
-            $html .= Html::beginForm($process->request->url, 'post', ['name' => 'redirectForm']);
-            foreach ($process->request->params as $key => $value) {
-                $html .= Html::hiddenInput($key, $value);
-            }
-            $html .= Html::endForm();
-            $html .= Html::script('document.redirectForm.submit()');
+		$result = GatewayModule::getInstance()->getGateway('selectedGateway')->start($order);
 
-            return $html;
-        }
-    }
+        return is_string($result)
+			? $this->renderContent($result)
+			: $result;
+    }*/
 
-    public function actionCallback($gatewayName)
+    public function actionSuccess()
     {
-        $process = GatewayModule::getInstance()->callback($gatewayName, $this->getRequest());
-        echo $process->responseText;
-    }
-
-    public function actionSuccess($gatewayName)
-    {
-        $error = \Yii::$app->request->get('error');
-        if ($error) {
-            return $error;
-        }
-        // @todo
         return $this->redirect(\Yii::$app->homeUrl);
-        //GatewayModule::getInstance()->end($gatewayName, true, $this->getRequest());
     }
 
-    public function actionFailure($gatewayName)
+    public function actionFailure()
     {
-        // @todo
-        //GatewayModule::getInstance()->end($gatewayName, false, $this->getRequest());
-    }
+		$error = \Yii::$app->request->get('error');
+		if ($error) {
+			return $this->renderContent(nl2br(htmlspecialchars($error)));
+		}
 
-    /**
-     * @return Request
-     */
-    protected function getRequest()
-    {
-        /** @var \yii\web\Request $request */
-        $request = \Yii::$app->request;
-
-        $port = $request->port && $request->port !== 80 ? ':' . $request->port : '';
-        return new Request([
-            'method' => $request->method,
-            'url' => $request->hostInfo . $port . str_replace('?' . $request->queryString, '', $request->url),
-            'params' => ArrayHelper::merge($request->get(), $request->post()),
-        ]);
+    	return $this->renderContent(\Yii::t('yii2-gateways', 'We are sorry but the payment is failed. Please try again or contact our support'));
     }
 }

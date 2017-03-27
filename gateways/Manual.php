@@ -3,7 +3,7 @@
 namespace gateway\gateways;
 
 use gateway\enums\Result;
-use gateway\enums\State;
+use gateway\enums\OrderState;
 use gateway\exceptions\UnsupportedStateMethodException;
 use \gateway\models\Process;
 use gateway\models\Request;
@@ -22,7 +22,7 @@ class Manual extends Base
     {
         return new Process([
             'transactionId' => $id,
-            'state' => State::WAIT_RESULT,
+            'state' => OrderState::WAIT_RESULT,
             'result' => Result::SUCCEED,
         ]);
     }
@@ -34,7 +34,7 @@ class Manual extends Base
     public function callback(Request $requestModel)
     {
         return new Process([
-            'state' => State::COMPLETE,
+            'state' => OrderState::COMPLETE,
             'result' => $requestModel->params['result'],
         ]);
     }

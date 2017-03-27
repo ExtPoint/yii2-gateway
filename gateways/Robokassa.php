@@ -3,7 +3,7 @@
 namespace gateway\gateways;
 
 use gateway\enums\Result;
-use gateway\enums\State;
+use gateway\enums\OrderState;
 use gateway\exceptions\InvalidArgumentException;
 use gateway\exceptions\SignatureMismatchRequestException;
 use gateway\models\Process;
@@ -54,7 +54,7 @@ class Robokassa extends Base
         $url = $this->url ?: ($this->testMode ? 'http://test.robokassa.ru/Index.aspx' : 'http://auth.robokassa.ru/Merchant/Index.aspx');
 
         return new Process([
-            'state' => State::WAIT_VERIFICATION,
+            'state' => OrderState::WAIT_VERIFICATION,
             'result' => Result::SUCCEED,
             'request' => new Request([
                 'url' => $url,
@@ -101,7 +101,7 @@ class Robokassa extends Base
 
         // Send success result
         return new Process([
-            'state' => State::COMPLETE,
+            'state' => OrderState::COMPLETE,
             'result' => Result::SUCCEED,
             'responseText' => 'OK' . $transactionId,
         ]);

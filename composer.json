@@ -1,14 +1,18 @@
 {
-    "name": "affka/yii2-gateway",
-    "version":"1.2.1",
-    "description": "Universal Api for payment systems",
+    "name": "ExtPoint/yii2-gateway",
+    "version":"2.0.0",
+    "description": "Universal yii2 module for payment systems",
     "keywords": ["yii2", "payment", "api"],
     "license": "MIT",
     "type": "yii2-extension",
     "authors": [
         {
-            "name": "Kozhin Vladimir",
+            "name": "Vladimir Kozhin",
             "email": "affka@affka.ru"
+        },
+        {
+            "name": "Pavel Koryagin",
+            "email": "pavel@koryagin.com"
         }
     ],
     "require":{

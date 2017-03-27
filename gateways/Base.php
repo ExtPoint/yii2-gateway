@@ -2,10 +2,15 @@
 
 namespace gateway\gateways;
 
+use gateway\exceptions\FeatureNotSupportedByGatewayException;
+use gateway\exceptions\InvalidDatabaseStateException;
 use gateway\GatewayModule;
-use gateway\models\Request;
+use gateway\models\Order;
+use yii\base\InvalidConfigException;
 use yii\base\Object;
+use yii\helpers\Url;
 use yii\log\Logger;
+use yii\web\Response;
 
 /**
  * Class Base
@@ -13,7 +18,6 @@ use yii\log\Logger;
  */
 abstract class Base extends Object
 {
-
     /**
      * Флаг, отображающий включена ли платёжный шлюз.
      * @var boolean
@@ -22,9 +26,9 @@ abstract class Base extends Object
 
     /**
      * Способ оплаты. Поле актуально только для платёжных интеграторов, где есть выбор способа оплаты.
-     * @var string
+     * @var string|null
      */
-    public $paymentMethod;
+    public $paymentMethod = null;
 
     /**
      * Флаг, отображающий включен ли платёжный шлюз для реальных транзакций.
@@ -34,7 +38,7 @@ abstract class Base extends Object
     public $testMode = true;
 
     /**
-     * Имя платёжного шлюза, одно из значений enum GatewayName
+     * Имя платёжного шлюза в GatewayModule->$gateways
      * @var string
      */
     public $name;
@@ -46,51 +50,63 @@ abstract class Base extends Object
     public $module;
 
     /**
-     * @param int $id
-     * @param integer|double $amount
-     * @param string $description
-     * @param array $params
-     * @return \gateway\models\Process
+     * @param Order $order
+     * @return Response|string
+	 * @throws FeatureNotSupportedByGatewayException
      */
-    abstract public function start($id, $amount, $description, $params);
+    public function start($order)
+	{
+		// Check sanity
+		if ($order->trialDays > 0 && !$this->supportsTrial()) {
+			throw new FeatureNotSupportedByGatewayException('Trials are not supported by ' . static::className());
+		}
+		if ($order->recurringAmount != 0 && !$this->supportsRecurring()) {
+			throw new FeatureNotSupportedByGatewayException('Recurring payments are not supported by ' . static::className());
+		}
+
+		// Gateways must update the model explicitly in one place
+		// Don't: // $order->gatewayName = $this->name;
+
+		return $this->internalStart($order);
+	}
+
+	/**
+	 * @param Order $order
+	 * @return Response|string
+	 */
+	abstract protected function internalStart($order);
 
     /**
-     * @param Request $request
-     * @return \gateway\models\Process
+	 * @param int $logId
+	 * @return Response|string
      */
-    abstract public function callback(Request $request);
+    abstract public function callback($logId);
 
-    /**
-     * Адрес магазина/сайта
-     * @return string
-     */
-    public function getSiteUrl()
-    {
-        return self::appendToUrl($this->module->siteUrl, 'gatewayName=' . $this->name);
-    }
 
-    /**
-     * Адрес, по которому должна направить пользователя платёжная система при успешной оплате
-     * @return string
-     */
-    public function getSuccessUrl()
-    {
-        return self::appendToUrl($this->module->successUrl, 'gatewayName=' . $this->name);
-    }
+    public function supportsRecurring()
+	{
+		return false;
+	}
 
-    /**
-     * Адрес, по которому должна направить пользователя платёжная система при неудачной оплате
-     * @return string
-     */
-    public function getFailureUrl()
-    {
-        return self::appendToUrl($this->module->failureUrl, 'gatewayName=' . $this->name);
-    }
+    public function supportsTrial()
+	{
+		return false;
+	}
 
-    protected static function appendToUrl($url, $query)
-    {
-        return $url . (strpos($url, '?') === false ? '?' : '&') . $query;
-    }
+	/**
+	 * @param Order|null $order Anonymous gateways (e.g. bitaps.com) supports custom callback URLs
+	 * @return string
+	 * @throws InvalidConfigException
+	 */
+    public function getCallbackUrl($order = null)
+	{
+		$url = $this->module->callbackUrl;
+		if (!is_array($this->module->callbackUrl)) {
+			throw new InvalidConfigException();
+		}
+		$url['gatewayName'] = $this->name;
+		return Url::to($url);
+	}
 
     /**
      * @param $message
@@ -103,31 +119,26 @@ abstract class Base extends Object
         $this->module->log($message, $level, $transactionId, $stateData);
     }
 
-    /**
-     * @param string|integer $id
-     * @param array $data
-     */
-    protected function setStateData($id, $data = [])
-    {
-        $this->module->stateSaver->set($this->name . '_' . (string) $id, $data);
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    protected function getStateData($id)
-    {
-        return $this->module->stateSaver->get($id);
-    }
-
     protected function httpSend($url, $params = [], $headers = [])
     {
         return $this->module->httpSend($url, $params, $headers);
     }
 
-    protected function findOrderStateById($id) {
-        $className = $this->module->orderClassName;
-        return class_exists($className) && $className::findOrderStateById($id);
+	/**
+	 * @param string $orderId
+	 * @return Order
+	 * @throws InvalidConfigException
+	 * @throws InvalidDatabaseStateException
+	 */
+    protected function getOrderById($orderId)
+	{
+        $orderClassName = $this->module->orderClassName;
+		$order = $orderClassName::findOne((string)$orderId);
+
+        if (!$order) {
+			throw new InvalidDatabaseStateException('Order not found');
+		}
+
+        return $order;
     }
 }

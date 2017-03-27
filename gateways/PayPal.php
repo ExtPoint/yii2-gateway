@@ -3,7 +3,7 @@
 namespace gateway\gateways;
 
 use gateway\enums\Result;
-use gateway\enums\State;
+use gateway\enums\OrderState;
 use gateway\exceptions\InvalidArgumentException;
 use gateway\exceptions\ProcessException;
 use \gateway\exceptions\UnsupportedStateMethodException;
@@ -82,7 +82,7 @@ class PayPal extends Base
         }
 
         // Set state
-        $processModel->state = State::WAIT_VERIFICATION;
+        $processModel->state = OrderState::WAIT_VERIFICATION;
         $processModel->result = isset($paymentResponseObject->state) && $paymentResponseObject->state === 'created' ?
             Result::SUCCEED :
             Result::ERROR;
@@ -164,7 +164,7 @@ class PayPal extends Base
         }
 
         return new Process([
-            'state' => State::COMPLETE,
+            'state' => OrderState::COMPLETE,
             'outsideTransactionId' => $outsideTransactionId,
             'result' => isset($paymentResponseObject->state) && $paymentResponseObject->state === 'approved' ?
                 Result::SUCCEED :

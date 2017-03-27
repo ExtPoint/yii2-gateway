@@ -4,7 +4,7 @@ namespace gateway\gateways;
 
 use Yii;
 use gateway\enums\Result;
-use gateway\enums\State;
+use gateway\enums\OrderState;
 use gateway\exceptions\GatewayException;
 use gateway\exceptions\InvalidArgumentException;
 use gateway\exceptions\SignatureMismatchRequestException;
@@ -57,7 +57,7 @@ class YandexKassa extends Base
         $url = $this->url ?: ($this->testMode ? 'https://demomoney.yandex.ru/eshop.xml' : 'https://money.yandex.ru/eshop.xml');
 
         return new Process([
-            'state' => State::WAIT_VERIFICATION,
+            'state' => OrderState::WAIT_VERIFICATION,
             'result' => Result::SUCCEED,
             'request' => new Request([
                 'url' => $url,
@@ -125,12 +125,12 @@ class YandexKassa extends Base
         }
 
         // Find state
-        $state = $this->findOrderStateById($request->params['orderNumber']);
+        $state = $this->getOrderById($request->params['orderNumber']);
 
         switch ($request->params['action']) {
             case 'checkOrder':
                 // Check order exists and state
-                if ($state === null || $state !== State::WAIT_VERIFICATION) {
+                if ($state === null || $state !== OrderState::WAIT_VERIFICATION) {
                     return new Process([
                         'result' => Result::ERROR,
                         'responseText' => $this->getXml($request, 100),
@@ -138,7 +138,7 @@ class YandexKassa extends Base
                 }
 
                 return new Process([
-                    'state' => State::WAIT_RESULT,
+                    'state' => OrderState::WAIT_RESULT,
                     'result' => Result::SUCCEED,
                     'outsideTransactionId' => (string) $request->params['invoiceId'],
                     'responseText' => $this->getXml($request, 0),
@@ -146,7 +146,7 @@ class YandexKassa extends Base
 
             case 'paymentAviso':
                 // Check order exists and state
-                if ($state === null || !in_array($state, [State::WAIT_VERIFICATION, State::WAIT_RESULT])) {
+                if ($state === null || !in_array($state, [OrderState::WAIT_VERIFICATION, OrderState::WAIT_RESULT])) {
                     return new Process([
                         'result' => Result::ERROR,
                         'responseText' => $this->getXml($request, 100),
@@ -154,7 +154,7 @@ class YandexKassa extends Base
                 }
 
                 return new Process([
-                    'state' => State::COMPLETE,
+                    'state' => OrderState::COMPLETE,
                     'result' => Result::SUCCEED,
                     'outsideTransactionId' => (string) $request->params['invoiceId'],
                     'responseText' => $this->getXml($request, 0),
