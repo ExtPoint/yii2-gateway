@@ -47,10 +47,11 @@ abstract class Base extends Object
 
     /**
      * @param Order $order
+     * @param array $noSaveParams Credit card data, nonce, gateway-passthrough, etc
      * @return Response|string
 	 * @throws FeatureNotSupportedByGatewayException
      */
-    public function start($order)
+    public function start($order, $noSaveParams = [])
 	{
 		// Check sanity
 		if ($order->trialDays > 0 && !$this->supportsTrial()) {
@@ -63,14 +64,15 @@ abstract class Base extends Object
 		// Gateways must update the model explicitly in one place
 		// Don't: // $order->gatewayName = $this->name;
 
-		return $this->internalStart($order);
+		return $this->internalStart($order, $noSaveParams);
 	}
 
 	/**
 	 * @param Order $order
+	 * @param array $noSaveParams
 	 * @return Response|string
 	 */
-	abstract protected function internalStart($order);
+	abstract protected function internalStart($order, $noSaveParams = []);
 
     /**
 	 * @param int $logId

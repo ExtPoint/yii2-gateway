@@ -35,12 +35,12 @@ class Robokassa extends Base
 	 */
 	public $paymentMethod;
 
-	protected function internalStart($order)
+	protected function internalStart($order, $noSaveParams = [])
 	{
 		// Additional params
 		$shpParams = [];
 		$shpSignature = '';
-		foreach ($order->gatewayParams as $key => $value) {
+		foreach ($order->gatewayParams + $noSaveParams as $key => $value) {
 			$shpParams['Shp_' . $key] = $value;
 			$shpSignature .= ':Shp_' . $key . '=' . $value;
 		}

@@ -55,7 +55,7 @@ class YandexKassa extends Base
     public $orderPhoneProperty = null;
 
 
-    protected function internalStart($order)
+    protected function internalStart($order, $noSaveParams = [])
 	{
 		if (!$order->hasProperty($this->orderUserIdProperty)) {
 			throw new GatewayException('User ID attribute is required for gateway "' . __CLASS__ . '".');
