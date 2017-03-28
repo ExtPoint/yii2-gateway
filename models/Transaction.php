@@ -8,7 +8,7 @@ use yii\db\ActiveRecord;
  * @property string|int $id
  * @property string $kind
  * @property string|int|null $orderId
- * @property string|int|null $logId
+ * @property string|int|null $logId Never pass null inside callback(). Null is for instant responses.
  * @property string|null $externalEventId
  * @property string|null $externalSubscriptionId
  * @property string|null $externalInvoiceId

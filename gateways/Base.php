@@ -237,7 +237,7 @@ abstract class Base extends Object
     /**
      * @param string $kind
      * @param string $orderId
-     * @param string $logId
+     * @param string|null $logId Never pass null inside callback(). Null is for instant responses.
      * @return Transaction
      */
     public function prepareTransaction($kind, $orderId, $logId)
@@ -257,7 +257,7 @@ abstract class Base extends Object
      * Shortcut
      * @param string $kind
      * @param string $orderId
-     * @param string $logId
+     * @param string|null $logId Never pass null inside callback(). Null is for instant responses.
      * @param string|null $notes
      * @param float|null $sum
      * @param string|null $externalEventId

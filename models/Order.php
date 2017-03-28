@@ -7,6 +7,7 @@ use gateway\enums\TransactionKind;
 use gateway\exceptions\GatewayException;
 use gateway\GatewayModule;
 use yii\db\ActiveRecord;
+use yii\helpers\ArrayHelper;
 
 /**
  * Db attributes
@@ -65,26 +66,18 @@ abstract class Order extends ActiveRecord
             }],
             ['initialAmount', function() {
                 $items = $this->items;
-                if ($items) {
-                    $sum = 0;
-                    foreach ($items as $item) {
-                        $sum += $item->initialAmount;
-                    }
-                    if ($sum !== $this->initialAmount) {
-                        $this->addError('initialAmount', \Yii::t('yii2-gateways', 'Initial amount or order is not equal the sum of initial amounts of its items'));
-                    }
+                if ($items
+                    && $this->initialAmount !== array_sum(ArrayHelper::getColumn($items, 'initialAmount'))
+                ) {
+                    $this->addError('initialAmount', \Yii::t('yii2-gateways', 'Initial amount or order is not equal the sum of initial amounts of its items'));
                 }
             }],
             ['recurringAmount', function() {
                 $items = $this->items;
-                if ($items) {
-                    $sum = 0;
-                    foreach ($items as $item) {
-                        $sum += $item->recurringAmount;
-                    }
-                    if ($sum !== $this->recurringAmount) {
-                        $this->addError('recurringAmount', \Yii::t('yii2-gateways', 'Recurring amount or order is not equal the sum of recurring amounts of its items'));
-                    }
+                if ($items
+                    && $this->recurringAmount !== array_sum(ArrayHelper::getColumn($items, 'recurringAmount'))
+                ) {
+                    $this->addError('recurringAmount', \Yii::t('yii2-gateways', 'Recurring amount or order is not equal the sum of recurring amounts of its items'));
                 }
             }],
         ];

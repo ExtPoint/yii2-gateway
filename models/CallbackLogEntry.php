@@ -6,6 +6,8 @@ use yii\db\ActiveRecord;
 /**
  * @property float $gatewayAmount
  * @property int $id
+ * @property string $time
+ * @property float|null $duration
  * @property string $requestDump
  * @property string|null $responseDump
  */

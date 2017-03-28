@@ -23,6 +23,7 @@ class CallbackAction extends Action
             'server' => $_SERVER,
         ]);
         GatewayModule::saveOrPanic($logEntry);
+        $start = microtime(true);
 
         // Execute
         $failed = false;
@@ -35,6 +36,7 @@ class CallbackAction extends Action
         }
 
         // Log result
+        $logEntry->duration = microtime(true) - $start;
         $logEntry->setResponse($result);
         GatewayModule::saveOrPanic($logEntry);
 
