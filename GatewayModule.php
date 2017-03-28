@@ -2,42 +2,19 @@
 
 namespace gateway;
 
-use gateway\components\IOrderInterface;
-use gateway\components\IStateSaver;
-use gateway\enums\OrderState;
 use gateway\exceptions\GatewayException;
 use gateway\exceptions\NotFoundGatewayException;
 use gateway\gateways\Base;
 use gateway\models\Order;
-use gateway\models\Process;
-use gateway\models\Request;
 use yii\base\Module;
 use yii\db\ActiveRecord;
-use yii\helpers\ArrayHelper;
 use yii\helpers\Html;
-use yii\helpers\Inflector;
 use yii\helpers\Url;
 use yii\log\Logger;
 use yii\web\Application;
-use yii\web\Controller;
 
 class GatewayModule extends Module
 {
-    /**
-     * @event ProcessEvent
-     */
-    const EVENT_START = 'start';
-
-    /**
-     * @event ProcessEvent
-     */
-    const EVENT_CALLBACK = 'callback';
-
-    /**
-     * @event ProcessEvent
-     */
-    const EVENT_END = 'end';
-
     /**
      * @var string
      */
@@ -73,31 +50,31 @@ class GatewayModule extends Module
      */
     public $callbackUrl = ['/gateway/gateway/callback'];
 
-	/**
-	 * @var Order
-	 */
-	public $orderClassName;
+    /**
+     * @var Order
+     */
+    public $orderClassName;
 
-	/**
-	 * @var Order
-	 */
-	public $transactionClassName;
+    /**
+     * @var Order
+     */
+    public $transactionClassName;
 
-	/**
-	 * @var Order
-	 */
-	public $callbackLogEntryClassName;
+    /**
+     * @var Order
+     */
+    public $callbackLogEntryClassName;
 
     /**
      * @return \gateway\GatewayModule
      */
     public static function getInstance()
-	{
+    {
         return \Yii::$app->getModule('gateway');
     }
 
     public function init()
-	{
+    {
         parent::init();
 
         if (\Yii::$app instanceof Application) {
@@ -110,57 +87,57 @@ class GatewayModule extends Module
         }
     }
 
-	/**
-	 * @param string|callable|array|null $url
-	 * @param Order $order
-	 * @param Base $gateway
-	 * @return string
-	 */
+    /**
+     * @param string|callable|array|null $url
+     * @param Order $order
+     * @param Base $gateway
+     * @return string
+     */
     protected function expandUrl($url, $order, $gateway)
-	{
-		if ($url === null) {
-			return Url::home(true);
-		}
-		if (is_callable($url)) {
-			return call_user_func($url, $order, $gateway);
-		}
-		return Url::to($url, true);
-	}
+    {
+        if ($url === null) {
+            return Url::home(true);
+        }
+        if (is_callable($url)) {
+            return call_user_func($url, $order, $gateway);
+        }
+        return Url::to($url, true);
+    }
 
-	/**
-	 * @param Order $order
-	 * @param Base $gateway
-	 * @return string
-	 */
+    /**
+     * @param Order $order
+     * @param Base $gateway
+     * @return string
+     */
     public function getEffectiveSiteUrl($order, $gateway)
-	{
-		return $this->expandUrl($this->siteUrl, $order, $gateway);
-	}
+    {
+        return $this->expandUrl($this->siteUrl, $order, $gateway);
+    }
 
-	/**
-	 * @param Order $order
-	 * @param Base $gateway
-	 * @return string
-	 */
+    /**
+     * @param Order $order
+     * @param Base $gateway
+     * @return string
+     */
     public function getEffectiveSuccessUrl($order, $gateway)
-	{
-		return $this->expandUrl($this->successUrl, $order, $gateway);
-	}
+    {
+        return $this->expandUrl($this->successUrl, $order, $gateway);
+    }
 
-	/**
-	 * @param Order $order
-	 * @param Base $gateway
-	 * @return string
-	 */
+    /**
+     * @param Order $order
+     * @param Base $gateway
+     * @return string
+     */
     public function getEffectiveFailureUrl($order, $gateway)
-	{
-		return $this->expandUrl($this->failureUrl, $order, $gateway);
-	}
+    {
+        return $this->expandUrl($this->failureUrl, $order, $gateway);
+    }
 
-	public function hasGateway($name)
-	{
-		return isset($this->gateways[$name]);
-	}
+    public function hasGateway($name)
+    {
+        return isset($this->gateways[$name]);
+    }
 
     /**
      * @param string $name
@@ -169,16 +146,16 @@ class GatewayModule extends Module
      * @throws \yii\base\InvalidConfigException
      */
     public function getGateway($name)
-	{
-		if (!isset($this->gateways[$name])) {
-			throw new NotFoundGatewayException();
-		}
+    {
+        if (!isset($this->gateways[$name])) {
+            throw new NotFoundGatewayException();
+        }
 
-		if (is_array($this->gateways[$name])) {
-			$this->gateways[$name] = \Yii::createObject(['name' => $name] + $this->gateways[$name]);
-		}
+        if (is_array($this->gateways[$name])) {
+            $this->gateways[$name] = \Yii::createObject(['name' => $name] + $this->gateways[$name]);
+        }
 
-    	return $this->gateways[$name];
+        return $this->gateways[$name];
     }
 
     /**
@@ -189,7 +166,7 @@ class GatewayModule extends Module
      * @throws \gateway\exceptions\GatewayException
      */
     public function log($message, $level = Logger::LEVEL_INFO, $transactionId = null, $stateData = [])
-	{
+    {
         $message .= "\n" .
             "Transaction: " . $transactionId . "\n" .
             "State: " . print_r($stateData, true) . "\n\n" .
@@ -205,7 +182,7 @@ class GatewayModule extends Module
      * @return string
      */
     public function httpSend($url, $params = [], $headers = [])
-	{
+    {
         $headers = array_merge([
             'Content-Type' => 'application/x-www-form-urlencoded',
         ], $headers);
@@ -224,15 +201,15 @@ class GatewayModule extends Module
         )));
     }
 
-	/**
-	 * @param ActiveRecord $model
-	 * @throws GatewayException
-	 */
+    /**
+     * @param ActiveRecord $model
+     * @throws GatewayException
+     */
     public static function saveOrPanic($model)
-	{
-		if (!$model->save()) {
-			throw new GatewayException('Unexpected ' . $model->className() . ' behavior');
-		}
-	}
+    {
+        if (!$model->save()) {
+            throw new GatewayException('Unexpected ' . $model->className() . ' behavior');
+        }
+    }
 
 }

@@ -30,44 +30,44 @@ class RobokassaTest extends \PHPUnit_Framework_TestCase {
         //$mock->expects($this->once())->method('httpSend');*/
 
         $gateway = new Robokassa([
-			'enable' => true,
-			'login' => self::ROBOKASSA_LOGIN,
-			'password1' => self::ROBOKASSA_PASSWORD,
-			'password2' => self::ROBOKASSA_PASSWORD_2,
+            'enable' => true,
+            'login' => self::ROBOKASSA_LOGIN,
+            'password1' => self::ROBOKASSA_PASSWORD,
+            'password2' => self::ROBOKASSA_PASSWORD_2,
             'testMode' => false,
         ]);
 
-		\Yii::$app = $this->getMock('\yii\web\Application');
-		\Yii::$app->expects( $this->any() )
-			->method('getResponse')
-			->will($this->returnCallback(function () {
-				return new Response();
-			}));
-		\Yii::$app->expects( $this->any() )
-			->method('getRequest')
-			->will($this->returnCallback(function () {
-				return new Request();
-			}));
+        \Yii::$app = $this->getMock('\yii\web\Application');
+        \Yii::$app->expects( $this->any() )
+            ->method('getResponse')
+            ->will($this->returnCallback(function () {
+                return new Response();
+            }));
+        \Yii::$app->expects( $this->any() )
+            ->method('getRequest')
+            ->will($this->returnCallback(function () {
+                return new Request();
+            }));
 
         /** @var Order|\PHPUnit_Framework_MockObject_MockObject $order */
         $order = $this->getMock('\gateway\models\Order');
         $order->expects( $this->any() )
-			->method('__get')
-			->will($this->returnCallback(function ($name) {
-				$properties = [
-					'id' => 'theOrderId',
-					'description' => 'the description',
-					'trialDays' => 0,
-					'gatewayRecurringAmount' => 0,
-					'gatewayInitialAmount' => 199,
-					'gatewayParams' => [
-						'theParam1' => 'theValue1',
-					],
-				];
-				return $properties[$name];
-			}));
+            ->method('__get')
+            ->will($this->returnCallback(function ($name) {
+                $properties = [
+                    'id' => 'theOrderId',
+                    'description' => 'the description',
+                    'trialDays' => 0,
+                    'gatewayRecurringAmount' => 0,
+                    'gatewayInitialAmount' => 199,
+                    'gatewayParams' => [
+                        'theParam1' => 'theValue1',
+                    ],
+                ];
+                return $properties[$name];
+            }));
 
-		// Start
+        // Start
         $response = $gateway->start($order);
         $this->assertEquals('wait_verification', $response);
         $this->assertEquals('succeed', $process->result);

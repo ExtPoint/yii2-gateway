@@ -15,49 +15,49 @@ use yii\web\Response;
  */
 class Braintree extends Base
 {
-	public $environment;
-	public $merchantId;
-	public $publicKey;
-	public $privateKey;
+    public $environment;
+    public $merchantId;
+    public $publicKey;
+    public $privateKey;
 
-	private $_connection;
+    private $_connection;
 
-	/**
-	 * @return Gateway
-	 * @throws InvalidConfigException
-	 */
-	public function getConnection()
-	{
-		if ($this->_connection === null) {
-			if (!$this->environment) {
-				throw new InvalidConfigException('Environment is required');
-			}
-			if (!$this->merchantId) {
-				throw new InvalidConfigException('Merchant ID is required');
-			}
-			if (!$this->publicKey) {
-				throw new InvalidConfigException('Public Key is required');
-			}
-			if (!$this->privateKey) {
-				throw new InvalidConfigException('Private Key is required');
-			}
+    /**
+     * @return Gateway
+     * @throws InvalidConfigException
+     */
+    public function getConnection()
+    {
+        if ($this->_connection === null) {
+            if (!$this->environment) {
+                throw new InvalidConfigException('Environment is required');
+            }
+            if (!$this->merchantId) {
+                throw new InvalidConfigException('Merchant ID is required');
+            }
+            if (!$this->publicKey) {
+                throw new InvalidConfigException('Public Key is required');
+            }
+            if (!$this->privateKey) {
+                throw new InvalidConfigException('Private Key is required');
+            }
 
-			$configuration = new Configuration();
-			$configuration->setEnvironment($this->environment);
-			$configuration->setMerchantId($this->merchantId);
-			$configuration->setPublicKey($this->publicKey);
-			$configuration->setPrivateKey($this->privateKey);
+            $configuration = new Configuration();
+            $configuration->setEnvironment($this->environment);
+            $configuration->setMerchantId($this->merchantId);
+            $configuration->setPublicKey($this->publicKey);
+            $configuration->setPrivateKey($this->privateKey);
 
-			$this->_connection = new Gateway($configuration);
-		}
+            $this->_connection = new Gateway($configuration);
+        }
 
-		return $this->_connection;
-	}
+        return $this->_connection;
+    }
 
-	protected function internalStart($order, $noSaveParams = [])
-	{
-		//$this->getConnection()->subscription()->find();
-	}
+    protected function internalStart($order, $noSaveParams = [])
+    {
+        //$this->getConnection()->subscription()->find();
+    }
 
     /**
      * @param int $logId

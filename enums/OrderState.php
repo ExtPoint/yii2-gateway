@@ -24,9 +24,9 @@ abstract class OrderState
      */
     const CANCELLED = 'cancelled';
 
-	// TODO: Use better enum
-	static function getKeys() {
-		$oClass = new \ReflectionClass(__CLASS__);
-		return $oClass->getConstants();
-	}
+    // TODO: Use better enum
+    static function getKeys() {
+        $oClass = new \ReflectionClass(__CLASS__);
+        return $oClass->getConstants();
+    }
 }

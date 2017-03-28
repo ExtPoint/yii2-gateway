@@ -21,20 +21,20 @@ use yii\db\ActiveRecord;
  */
 abstract class OrderItem extends ActiveRecord
 {
-	abstract public function getOrder();
+    abstract public function getOrder();
 
-	public function getTitle()
-	{
-		throw new GatewayException('Implement this in user code');
-	}
+    public function getTitle()
+    {
+        throw new GatewayException('Implement this in user code');
+    }
 
-	public function getGatewayInitialAmount()
-	{
-		return $this->initialAmount;
-	}
+    public function getGatewayInitialAmount()
+    {
+        return $this->initialAmount;
+    }
 
-	public function getGatewayRecurringAmount()
-	{
-		return $this->recurringAmount;
-	}
+    public function getGatewayRecurringAmount()
+    {
+        return $this->recurringAmount;
+    }
 }

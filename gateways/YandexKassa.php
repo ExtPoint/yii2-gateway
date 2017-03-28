@@ -35,7 +35,7 @@ class YandexKassa extends Base
 
     /**
      * @var string
-	 * @see https://tech.yandex.ru/money/doc/payment-solution/reference/payment-type-codes-docpage/
+     * @see https://tech.yandex.ru/money/doc/payment-solution/reference/payment-type-codes-docpage/
      */
     public $defaultPaymentMethod = 'AC'; // AC = Банковская карта
 
@@ -56,31 +56,31 @@ class YandexKassa extends Base
 
 
     protected function internalStart($order, $noSaveParams = [])
-	{
-		if (!$order->hasProperty($this->orderUserIdProperty)) {
-			throw new GatewayException('User ID attribute is required for gateway "' . __CLASS__ . '".');
-		}
+    {
+        if (!$order->hasProperty($this->orderUserIdProperty)) {
+            throw new GatewayException('User ID attribute is required for gateway "' . __CLASS__ . '".');
+        }
 
-		// Remote url
-		$url = $this->url ?: ($this->testMode ? 'https://demomoney.yandex.ru/eshop.xml' : 'https://money.yandex.ru/eshop.xml');
+        // Remote url
+        $url = $this->url ?: ($this->testMode ? 'https://demomoney.yandex.ru/eshop.xml' : 'https://money.yandex.ru/eshop.xml');
 
-		return $this->redirectPost(
-			$url,
-			[
-				'shopId' => $this->shopId,
-				'scid' => $this->scId,
-				'sum' => number_format((float)$order->gatewayInitialAmount, 2, '.', ''),
-				'customerNumber' => $order->{$this->orderUserIdProperty},
-				'cps_email' => $this->orderEmailProperty ? $order->{$this->orderEmailProperty} : '',
-				'cps_phone' => $this->orderPhoneProperty ? $order->{$this->orderPhoneProperty} : '',
-				// See https://tech.yandex.ru/money/doc/payment-solution/reference/payment-type-codes-docpage/
-				'paymentType' => $order->gatewayPaymentMethod !== null ? $order->gatewayPaymentMethod : $this->defaultPaymentMethod,
-				'orderNumber' => $order->id,
-				'shopSuccessURL' => $this->getSuccessUrl($order),
-				'shopFailURL' => $this->getFailureUrl($order),
-			]
-		);
-	}
+        return $this->redirectPost(
+            $url,
+            [
+                'shopId' => $this->shopId,
+                'scid' => $this->scId,
+                'sum' => number_format((float)$order->gatewayInitialAmount, 2, '.', ''),
+                'customerNumber' => $order->{$this->orderUserIdProperty},
+                'cps_email' => $this->orderEmailProperty ? $order->{$this->orderEmailProperty} : '',
+                'cps_phone' => $this->orderPhoneProperty ? $order->{$this->orderPhoneProperty} : '',
+                // See https://tech.yandex.ru/money/doc/payment-solution/reference/payment-type-codes-docpage/
+                'paymentType' => $order->gatewayPaymentMethod !== null ? $order->gatewayPaymentMethod : $this->defaultPaymentMethod,
+                'orderNumber' => $order->id,
+                'shopSuccessURL' => $this->getSuccessUrl($order),
+                'shopFailURL' => $this->getFailureUrl($order),
+            ]
+        );
+    }
 
     /**
      * @param int $logId
@@ -127,19 +127,19 @@ class YandexKassa extends Base
 
         // Validate order sum
         if (abs($order->gatewayInitialAmount - $post['orderSumAmount']) > 0.001) {
-        	return $this->getXml(1);
-		}
+            return $this->getXml(1);
+        }
 
-		// Send success
+        // Send success
         switch ($post['action']) {
             case 'checkOrder':
-            	$this->logTransaction(TransactionKind::ORDER_CHECK, $order->id, $logId, null, $post['orderSumAmount']);
-            	return $this->getXml(0);
+                $this->logTransaction(TransactionKind::ORDER_CHECK, $order->id, $logId, null, $post['orderSumAmount']);
+                return $this->getXml(0);
 
             case 'paymentAviso':
-				$this->logTransaction(TransactionKind::PAYMENT_RECEIVED, $order->id, $logId, null, $post['orderSumAmount']);
-				$order->markComplete(); // Because sum is already checked
-				return $this->getXml(0);
+                $this->logTransaction(TransactionKind::PAYMENT_RECEIVED, $order->id, $logId, null, $post['orderSumAmount']);
+                $order->markComplete(); // Because sum is already checked
+                return $this->getXml(0);
         }
 
         // Send problem
@@ -147,13 +147,13 @@ class YandexKassa extends Base
     }
 
     public function getResponseFromException(\Throwable $e)
-	{
-		return $this->getXml(100);
-	}
-
-	protected function getXml($code, $params = [])
     {
-    	$post = Yii::$app->request->post();
+        return $this->getXml(100);
+    }
+
+    protected function getXml($code, $params = [])
+    {
+        $post = Yii::$app->request->post();
 
         $params = array_merge([
             'code' => $code,
@@ -171,10 +171,10 @@ class YandexKassa extends Base
         $xml = '<?xml version="1.0" encoding="UTF-8"?>';
         $xml .= '<' . $tag . ' ' . implode(' ', $tagAttributes) . '/>';
 
-		$response = new Response();
-		$response->format = Response::FORMAT_RAW;
-		$response->headers->set('Content-Type', 'application/xml; charset=' . Yii::$app->charset);
-		$response->content = $xml;
+        $response = new Response();
+        $response->format = Response::FORMAT_RAW;
+        $response->headers->set('Content-Type', 'application/xml; charset=' . Yii::$app->charset);
+        $response->content = $xml;
 
         return $response;
     }

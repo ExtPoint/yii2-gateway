@@ -11,13 +11,13 @@ use yii\db\ActiveRecord;
  */
 class CallbackLogEntry extends ActiveRecord
 {
-	public function setRequest($data)
-	{
-		$this->requestDump = var_export($data, true);
-	}
+    public function setRequest($data)
+    {
+        $this->requestDump = var_export($data, true);
+    }
 
-	public function setResponse($data)
-	{
-		$this->responseDump = var_export($data, true);
-	}
+    public function setResponse($data)
+    {
+        $this->responseDump = var_export($data, true);
+    }
 }

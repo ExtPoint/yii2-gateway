@@ -9,9 +9,9 @@ abstract class RecurringPeriodName
     const MONTH = 'month';
     const YEAR = 'year';
 
-	// TODO: Use better enum
-	static function getKeys() {
-		$oClass = new \ReflectionClass(__CLASS__);
-		return $oClass->getConstants();
-	}
+    // TODO: Use better enum
+    static function getKeys() {
+        $oClass = new \ReflectionClass(__CLASS__);
+        return $oClass->getConstants();
+    }
 }
