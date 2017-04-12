@@ -9,8 +9,9 @@ use yii\base\Action;
 
 class CallbackAction extends Action
 {
-    public function actionCallback($gatewayName)
+    public function run()
     {
+        $gatewayName = \Yii::$app->request->get('gatewayName');
         $module = GatewayModule::getInstance();
 
         // Start logging

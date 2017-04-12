@@ -25,7 +25,7 @@ abstract class Transaction extends ActiveRecord
     {
         return [
             [['kind'], 'required'],
-            ['kind', 'range', 'in' => TransactionKind::getKeys()],
+            ['kind', 'in', 'range' => TransactionKind::getKeys()],
             [['sum'], 'number'],
 
             // Complex logic

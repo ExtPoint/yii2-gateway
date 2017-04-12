@@ -4,9 +4,7 @@ namespace gateway\gateways;
 
 use Braintree\Configuration;
 use Braintree\Gateway;
-use gateway\enums\TransactionKind;
-use Yii;
-use gateway\exceptions\GatewayException;
+use Braintree\WebhookNotification;
 use yii\base\InvalidConfigException;
 use yii\web\Response;
 
@@ -21,6 +19,11 @@ class Braintree extends Base
     public $privateKey;
 
     private $_connection;
+
+    public function supportsRecurring()
+    {
+        return true;
+    }
 
     /**
      * @return Gateway
@@ -56,7 +59,6 @@ class Braintree extends Base
 
     protected function internalStart($order, $noSaveParams = [])
     {
-        //$this->getConnection()->subscription()->find();
     }
 
     /**
@@ -65,6 +67,35 @@ class Braintree extends Base
      */
     public function callback($logId)
     {
+        // Note: WebhookNotification class supports only global configuration
+        Configuration::merchantId($this->merchantId);
+        Configuration::environment($this->environment);
+        Configuration::publicKey($this->publicKey);
+        Configuration::privateKey($this->privateKey);
+
+        $webHookNotification = WebhookNotification::parse(
+            \Yii::$app->request->post('bt_signature'),
+            \Yii::$app->request->post('bt_payload'));
+
+        $subscriptionId = isset($webHookNotification->subscription)
+            ? $webHookNotification->subscription->id
+            : null;
+
+        $transactionId = isset($webHookNotification->transaction)
+            ? $webHookNotification->transaction->id
+            : null;
+
+        $sum = $transactionId
+            ? $webHookNotification->transaction->amount
+            : null;
+
+        if(!$sum && $subscriptionId && count($webHookNotification->subscription->transactions) > 0){
+            $sum = $webHookNotification->subscription->transactions[0]->amount;
+        }
+
+        $this->logTransaction($webHookNotification->kind, null, $logId, null, $sum, $transactionId, $subscriptionId);
+
+        // TODO: return 'something';
     }
 
 }

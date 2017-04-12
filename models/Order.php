@@ -6,6 +6,7 @@ use gateway\enums\RecurringPeriodName;
 use gateway\enums\TransactionKind;
 use gateway\exceptions\GatewayException;
 use gateway\GatewayModule;
+
 use yii\db\ActiveRecord;
 use yii\helpers\ArrayHelper;
 
@@ -44,23 +45,26 @@ abstract class Order extends ActiveRecord
             ['recurringAmount', 'default', 'value' => 0],
 
             // Types
-            ['state', 'range', 'in' => OrderState::getKeys()],
-            ['recurringPeriodName', 'range', 'in' => RecurringPeriodName::getKeys()],
+            ['state', 'in', 'range' => OrderState::getKeys()],
+            ['recurringPeriodName', 'in', 'range' => RecurringPeriodName::getKeys()],
 
             // Complex logic
             ['state', function() {
-                if ($this->isAttributeChanged('state') && $this->getOldAttribute('state') !== OrderState::READY) {
-                    $this->addError('state', \Yii::t('yii2-gateways', 'Order cannot be reverted from terminal states'));
-                }
-                elseif (!$this->hasErrors('state')) {
-                    $sum = 0;
-                    foreach ($this->transactions as $transaction) {
-                        if ($transaction->kind === TransactionKind::PAYMENT_RECEIVED) {
-                            $sum += $transaction->sum;
-                        }
+                if(!$this->isNewRecord){
+                    if ($this->isAttributeChanged('state') && $this->getOldAttribute('state') !== OrderState::READY) {
+                        $this->addError('state', \Yii::t('yii2-gateways', 'Order cannot be reverted from terminal states'));
                     }
-                    if ($this->gatewayInitialAmount > $sum + 0.0001) {
-                        $this->addError('state', \Yii::t('yii2-gateways', 'Payment transactions mismatch the sum'));
+                    elseif ($this->state === OrderState::COMPLETE && !$this->hasErrors('state')) {
+                        $sum = 0.0;
+                        foreach ($this->transactions as $transaction) {
+                            if ($transaction->kind === TransactionKind::PAYMENT_RECEIVED) {
+                                $sum += $transaction->sum;
+                            }
+                        }
+
+                        if ((float)$this->gatewayInitialAmount > $sum + 0.0001) {
+                            $this->addError('state', \Yii::t('yii2-gateways', 'Payment transactions mismatch the sum'));
+                        }
                     }
                 }
             }],
