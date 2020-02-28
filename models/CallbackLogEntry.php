@@ -15,11 +15,23 @@ class CallbackLogEntry extends ActiveRecord
 {
     public function setRequest($data)
     {
-        $this->requestDump = var_export($data, true);
+        try {
+            $requestDump = var_export($data, true);
+        }
+        catch (\Throwable $e) {
+            $requestDump = print_r($data, true);
+        }
+        $this->requestDump = $requestDump;
     }
 
     public function setResponse($data)
     {
-        $this->responseDump = var_export($data, true);
+        try {
+            $responseDump = var_export($data, true);
+        }
+        catch (\Throwable $e) {
+            $responseDump = print_r($data, true);
+        }
+        $this->responseDump = $responseDump;
     }
 }
