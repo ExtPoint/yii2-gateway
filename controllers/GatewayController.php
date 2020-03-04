@@ -20,7 +20,7 @@ class GatewayController extends Controller
     public function actions()
     {
         return [
-            'callback' => CallbackAction::className(),
+            'callback' => CallbackAction::class,
         ];
     }
 

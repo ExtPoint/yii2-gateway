@@ -4,24 +4,21 @@ namespace gateway\enums;
 
 abstract class OrderState
 {
-    /**
-     * Ожидаем оплаты
-     */
+    /** Waiting for payment */
     const READY = 'ready';
 
-    /**
-     * Успех
-     */
+    /** Success */
     const COMPLETE = 'complete';
+
+    /** Subscription is started and not yet cancelled */
+    const SUBSCRIPTION_ACTIVE = 'subscriptionActive';
 
     /**
      * Невосстановимая проблема, либо отмена операции на стороне платёжной системы
      */
     // Не бывает так. Не получилось - пытаемся ещё раз, пока не CANCELLED // const FAILED = 'failed';
 
-    /**
-     * Устарел или отменён на стороне приложения
-     */
+    /** Expired, or cancelled by the app, or it was a subscription and it is cancelled by user */
     const CANCELLED = 'cancelled';
 
     // TODO: Use better enum

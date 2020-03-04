@@ -3,7 +3,7 @@
 namespace gateway\gateways;
 
 use gateway\exceptions\InvalidArgumentException;
-use gateway\exceptions\SignatureMismatchRequestException;
+use gateway\exceptions\RequestAuthenticityException;
 use yii\web\Response;
 
 class Robokassa extends Base
@@ -49,7 +49,7 @@ class Robokassa extends Base
         $url = $this->url ?: ($this->testMode ? 'http://test.robokassa.ru/Index.aspx' : 'http://auth.robokassa.ru/Merchant/Index.aspx');
 
         $amount = sprintf('%.2f', $order->gatewayInitialAmount);
-            
+
         return $this->redirect($url . '?' .
             http_build_query(array_merge($shpParams, [
                 'MrchLogin' => $this->login,
@@ -61,26 +61,26 @@ class Robokassa extends Base
                 'Culture' => 'ru',
                 'Encoding' => 'utf-8',
             ]))
-        );      
+        );
     }
 
     /**
      * @param int $logId
      * @return Response|string|mixed
      * @throws InvalidArgumentException
-     * @throws SignatureMismatchRequestException
+     * @throws RequestAuthenticityException
      */
     public function callback($logId)
     {
         $post = \Yii::$app->request->post();
-        
+
         // Check required params
         if (empty($post['InvId']) || empty($post['SignatureValue'])) {
             throw new InvalidArgumentException('Invalid request arguments. Need `InvId` and `SignatureValue`.');
         }
 
         // Find order
-        $order = $this->getOrderById($post['InvId']);
+        $order = $this->requireOrderByPublicId($post['InvId']);
 
         // Generate hash sum
         $md5 = strtoupper(md5($post['OutSum'] . ':' . $order->id . ':' . $this->password2));
@@ -88,7 +88,7 @@ class Robokassa extends Base
 
         // Check md5 hash
         if ($md5 !== $remoteMD5) {
-            throw new SignatureMismatchRequestException();
+            throw new RequestAuthenticityException();
         }
 
         // Send success result

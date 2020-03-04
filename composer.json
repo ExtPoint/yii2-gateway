@@ -1,6 +1,6 @@
 {
     "name": "extpoint/yii2-gateway",
-    "version":"2.0.2",
+    "version":"3.0.0",
     "description": "Universal yii2 module for payment systems",
     "keywords": ["yii2", "payment", "api"],
     "license": "MIT",
@@ -15,15 +15,17 @@
             "email": "pavel@koryagin.com"
         }
     ],
-    "require":{
-        "php":">=5.4.0",
-        "yiisoft/yii2": "~2.0.4"
+    "require": {
+        "php":">=7.1.0",
+        "ext-json": "*",
+        "ext-curl": "*",
+        "yiisoft/yii2": "~2.0.4",
+        "extpoint/yii2-core": "^2"
     },
     "require-dev": {
         "phpunit/phpunit": "3.7.*"
     },
     "suggest": {
-        "phpunit/phpunit": "3.7.*",
         "braintree/braintree_php": "^3.22"
     },
     "autoload": {

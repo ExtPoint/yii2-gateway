@@ -2,13 +2,14 @@
 
 namespace gateway\gateways;
 
+use extpoint\yii2\exceptions\NotImplementedException;
 use gateway\exceptions\FeatureNotSupportedByGatewayException;
 use gateway\exceptions\InvalidDatabaseStateException;
 use gateway\GatewayModule;
 use gateway\models\Order;
 use gateway\models\Transaction;
 use yii\base\InvalidConfigException;
-use yii\base\Object;
+use yii\base\BaseObject;
 use yii\helpers\Html;
 use yii\helpers\Url;
 use yii\log\Logger;
@@ -18,7 +19,7 @@ use yii\web\Response;
  * Class Base
  * @package gateway\gateways
  */
-abstract class Base extends Object
+abstract class Base extends BaseObject
 {
     /**
      * Флаг, отображающий включена ли платёжный шлюз.
@@ -55,10 +56,10 @@ abstract class Base extends Object
     {
         // Check sanity
         if ($order->trialDays > 0 && !$this->supportsTrial()) {
-            throw new FeatureNotSupportedByGatewayException('Trials are not supported by ' . static::className());
+            throw new FeatureNotSupportedByGatewayException('Trials are not supported by ' . static::class);
         }
         if ($order->gatewayRecurringAmount != 0 && !$this->supportsRecurring()) {
-            throw new FeatureNotSupportedByGatewayException('Recurring payments are not supported by ' . static::className());
+            throw new FeatureNotSupportedByGatewayException('Recurring payments are not supported by ' . static::class);
         }
 
         // Gateways must update the model explicitly in one place
@@ -72,14 +73,18 @@ abstract class Base extends Object
      * @param array $noSaveParams
      * @return Response|string
      */
-    abstract protected function internalStart($order, $noSaveParams = []);
+    protected function internalStart($order, $noSaveParams = [])
+    {
+        throw new NotImplementedException();
+    }
 
     /**
      * @param int $logId
      * @return Response|string|mixed
      */
-    abstract public function callback($logId);
-
+    public function callback($logId) {
+        throw new NotImplementedException();
+    }
 
     public function supportsRecurring()
     {
@@ -130,7 +135,7 @@ abstract class Base extends Object
             throw new InvalidConfigException();
         }
         $url['gatewayName'] = $this->name;
-        return Url::to($url);
+        return Url::to($url, true);
     }
 
     /**
@@ -187,7 +192,7 @@ abstract class Base extends Object
      */
     public function redirectPost($url, $postFields)
     {
-        $formId = __CLASS__;
+        $formId = 'payment-redirect';
 
         $result = Html::tag(
             'div',
@@ -222,10 +227,10 @@ abstract class Base extends Object
      * @throws InvalidConfigException
      * @throws InvalidDatabaseStateException
      */
-    public function getOrderById($orderId)
+    public function requireOrderByPublicId($orderId)
     {
         $orderClassName = $this->module->orderClassName;
-        $order = $orderClassName::findOne((string)$orderId);
+        $order = $orderClassName::findByPublicId($orderId);
 
         if (!$order) {
             throw new InvalidDatabaseStateException('Order not found');
@@ -280,6 +285,6 @@ abstract class Base extends Object
             $transaction->gatewayExtra = $gatewayExtra;
         }
 
-        GatewayModule::saveOrPanic($transaction);
+        $transaction->saveOrPanic();
     }
 }

@@ -1,13 +1,16 @@
 <?php
 namespace gateway\models;
 
+use extpoint\yii2\base\Model;
+use extpoint\yii2\exceptions\UnexpectedCaseException;
 use gateway\enums\OrderState;
 use gateway\enums\RecurringPeriodName;
 use gateway\enums\TransactionKind;
 use gateway\exceptions\GatewayException;
 use gateway\GatewayModule;
 
-use yii\db\ActiveRecord;
+use gateway\gateways\Base;
+use yii\db\ActiveQueryInterface;
 use yii\helpers\ArrayHelper;
 
 /**
@@ -22,6 +25,7 @@ use yii\helpers\ArrayHelper;
  * @property string|null $gatewayParamsJson
  *
  * Dynamic in library, but could be by database in app
+ * @property string $publicId Id to show to user
  * @property string $title Short description
  * @property string $description Complete description
  * @property int $trialDays
@@ -34,7 +38,7 @@ use yii\helpers\ArrayHelper;
  * @property OrderItem[]|null $items
  * @property Transaction[] $transactions
  */
-abstract class Order extends ActiveRecord
+abstract class Order extends Model
 {
     public function rules()
     {
@@ -50,8 +54,12 @@ abstract class Order extends ActiveRecord
 
             // Complex logic
             ['state', function() {
-                if(!$this->isNewRecord){
-                    if ($this->isAttributeChanged('state') && $this->getOldAttribute('state') !== OrderState::READY) {
+                if (!$this->isNewRecord) {
+                    if (
+                        $this->isAttributeChanged('state')
+                        && $this->getOldAttribute('state') !== OrderState::READY
+                        && !($this->getOldAttribute('state') === OrderState::SUBSCRIPTION_ACTIVE && $this->state === OrderState::COMPLETE)
+                    ) {
                         $this->addError('state', \Yii::t('yii2-gateways', 'Order cannot be reverted from terminal states'));
                     }
                     elseif ($this->state === OrderState::COMPLETE && !$this->hasErrors('state')) {
@@ -59,6 +67,10 @@ abstract class Order extends ActiveRecord
                         foreach ($this->transactions as $transaction) {
                             if ($transaction->kind === TransactionKind::PAYMENT_RECEIVED) {
                                 $sum += $transaction->sum;
+                            }
+                            else if($transaction->notes === 'Gateway Rejected: duplicate') {
+                                $this->addError('state', \Yii::t('yii2-gateways', 'Protection. The transaction duplicates the previous transaction.'));
+                                return;
                             }
                         }
 
@@ -96,7 +108,21 @@ abstract class Order extends ActiveRecord
         */;
     }
 
+    /**
+     * @return ActiveQueryInterface
+     */
     abstract public function getTransactions();
+
+    /**
+     * @return Base
+     */
+    public function getGateway()
+    {
+        if (!$this->gatewayName) {
+            throw new UnexpectedCaseException();
+        }
+        return GatewayModule::getInstance()->getGateway($this->gatewayName);
+    }
 
     public function getGatewayParams()
     {
@@ -106,6 +132,20 @@ abstract class Order extends ActiveRecord
     public function setGatewayParams($data)
     {
         $this->gatewayParamsJson = json_encode($data);
+    }
+
+    public function getPublicId()
+    {
+        return $this->id;
+    }
+
+    /**
+     * @param $id
+     * @return Order|null
+     */
+    public static function findByPublicId($id)
+    {
+        return static::findOne((string)$id);
     }
 
     public function getTitle()
@@ -141,9 +181,48 @@ abstract class Order extends ActiveRecord
         return null;
     }
 
-    public function markComplete()
+
+    /////// Scenario methods ///////////////////////////
+
+    /**
+     * @param string $externalTransactionId
+     * @param string|null $transactionNotes
+     * @param string|null $logId
+     * @param array $gatewayExtra
+     */
+    public function processPaymentReceived($externalTransactionId, $logId = null, $transactionNotes = null, $gatewayExtra = [])
     {
-        $this->state = OrderState::COMPLETE;
-        GatewayModule::saveOrPanic($this);
+        /** @var Transaction $transactionClass */
+        $transactionClass = GatewayModule::getInstance()->transactionClassName;
+        // Skip already handled events
+        $transaction = $transactionClass::findOne(['externalEventId' => $externalTransactionId]);
+        if ($transaction) {
+            return;
+        }
+
+        // Detect payment type
+        $isInitial = !$this->getTransactions()
+            ->where(['kind' => TransactionKind::PAYMENT_RECEIVED])
+            ->exists();
+
+        // Log
+        /** @var Transaction $transaction */
+        $transaction = new $transactionClass();
+        $transaction->kind = TransactionKind::PAYMENT_RECEIVED;
+        $transaction->logId = $logId;
+        $transaction->orderId = $this->id;
+        $transaction->notes = $transactionNotes;
+        $transaction->sum = $isInitial ? $this->initialAmount : $this->recurringAmount;
+        $transaction->externalEventId = $externalTransactionId;
+        if ($gatewayExtra) {
+            $transaction->gatewayExtra = $gatewayExtra;
+        }
+        $transaction->saveOrPanic();
+
+        // Complete only on single payment
+        if (!$this->recurringAmount) {
+            $this->state = OrderState::COMPLETE;
+            $this->saveOrPanic();
+        }
     }
 }

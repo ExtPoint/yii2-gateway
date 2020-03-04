@@ -1,8 +1,9 @@
 <?php
 namespace gateway\models;
 
+use extpoint\yii2\base\Model;
+use extpoint\yii2\validators\ExtDateValidator;
 use gateway\enums\TransactionKind;
-use yii\db\ActiveRecord;
 
 /**
  * @property string|int $id
@@ -19,7 +20,7 @@ use yii\db\ActiveRecord;
  * @property Order|null $order
  * @property array $gatewayExtra
  */
-abstract class Transaction extends ActiveRecord
+abstract class Transaction extends Model
 {
     public function rules()
     {
@@ -27,6 +28,7 @@ abstract class Transaction extends ActiveRecord
             [['kind'], 'required'],
             ['kind', 'in', 'range' => TransactionKind::getKeys()],
             [['sum'], 'number'],
+            [['billingPeriodStartDate', 'billingPeriodEndDate'], ExtDateValidator::class],
 
             // Complex logic
             ['kind', function() {

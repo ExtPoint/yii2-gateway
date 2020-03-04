@@ -100,7 +100,7 @@ class YandexKassa extends Base
             'invoiceId',
             'customerNumber',
         ];
-        
+
         $post = Yii::$app->request->post();
         if (count(array_intersect_key($post, $requiredParams)) != count($requiredParams)) {
             return $this->getXml(200);
@@ -123,7 +123,7 @@ class YandexKassa extends Base
         }
 
         // Find order
-        $order = $this->getOrderById($post['orderNumber']);
+        $order = $this->requireOrderByPublicId($post['orderNumber']);
 
         // Validate order sum
         if (abs($order->gatewayInitialAmount - $post['orderSumAmount']) > 0.001) {
@@ -138,7 +138,7 @@ class YandexKassa extends Base
 
             case 'paymentAviso':
                 $this->logTransaction(TransactionKind::PAYMENT_RECEIVED, $order->id, $logId, null, $post['orderSumAmount']);
-                $order->markComplete(); // Because sum is already checked
+                $order->processPaymentReceived($post['invoiceId'], $logId); // Because sum is already checked
                 return $this->getXml(0);
         }
 

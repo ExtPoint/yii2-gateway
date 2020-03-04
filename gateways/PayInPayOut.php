@@ -5,7 +5,7 @@ namespace gateway\gateways;
 use gateway\enums\Result;
 use gateway\enums\OrderState;
 use gateway\exceptions\InvalidArgumentException;
-use gateway\exceptions\SignatureMismatchRequestException;
+use gateway\exceptions\RequestAuthenticityException;
 use gateway\models\Process;
 use gateway\models\Request;
 
@@ -126,7 +126,7 @@ class PayInPayOut extends Base
      * @param Request $request
      * @return Process
      * @throws InvalidArgumentException
-     * @throws SignatureMismatchRequestException
+     * @throws RequestAuthenticityException
      */
     public function callback(Request $request)
     {
@@ -154,7 +154,7 @@ class PayInPayOut extends Base
 
         // Check md5 hash
         if ($md5 !== $remoteMD5) {
-            throw new SignatureMismatchRequestException();
+            throw new RequestAuthenticityException();
         }
 
         $process = new Process();

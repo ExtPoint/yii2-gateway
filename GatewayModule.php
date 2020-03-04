@@ -2,16 +2,14 @@
 
 namespace gateway;
 
-use gateway\exceptions\GatewayException;
 use gateway\exceptions\NotFoundGatewayException;
 use gateway\gateways\Base;
+use gateway\models\CallbackLogEntry;
 use gateway\models\Order;
-use yii\base\Module;
-use yii\db\ActiveRecord;
-use yii\helpers\Html;
+use extpoint\yii2\base\Module;
+use gateway\models\Transaction;
 use yii\helpers\Url;
 use yii\log\Logger;
-use yii\web\Application;
 
 class GatewayModule extends Module
 {
@@ -56,12 +54,12 @@ class GatewayModule extends Module
     public $orderClassName;
 
     /**
-     * @var Order
+     * @var Transaction
      */
     public $transactionClassName;
 
     /**
-     * @var Order
+     * @var CallbackLogEntry
      */
     public $callbackLogEntryClassName;
 
@@ -71,20 +69,6 @@ class GatewayModule extends Module
     public static function getInstance()
     {
         return \Yii::$app->getModule('gateway');
-    }
-
-    public function init()
-    {
-        parent::init();
-
-        if (\Yii::$app instanceof Application) {
-            $this->siteUrl = $this->siteUrl ? Url::to($this->siteUrl, true) : \Yii::$app->homeUrl;
-            $this->successUrl = Url::to($this->successUrl, true);
-            $this->failureUrl = Url::to($this->failureUrl, true);
-        } else {
-            $this->successUrl = is_array($this->successUrl) ? $this->successUrl[0] : $this->successUrl;
-            $this->failureUrl = is_array($this->failureUrl) ? $this->failureUrl[0] : $this->failureUrl;
-        }
     }
 
     /**
@@ -152,7 +136,10 @@ class GatewayModule extends Module
         }
 
         if (is_array($this->gateways[$name])) {
-            $this->gateways[$name] = \Yii::createObject(['name' => $name] + $this->gateways[$name]);
+            $this->gateways[$name] = \Yii::createObject(
+                ['name' => $name, 'module' => $this]
+                + $this->gateways[$name]
+            );
         }
 
         return $this->gateways[$name];
@@ -200,16 +187,4 @@ class GatewayModule extends Module
             ),
         )));
     }
-
-    /**
-     * @param ActiveRecord $model
-     * @throws GatewayException
-     */
-    public static function saveOrPanic($model)
-    {
-        if (!$model->save()) {
-            throw new GatewayException('Unexpected ' . $model->className() . ' behavior');
-        }
-    }
-
 }

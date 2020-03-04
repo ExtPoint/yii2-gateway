@@ -1,7 +1,7 @@
 <?php
 namespace gateway\models;
 
-use yii\db\ActiveRecord;
+use extpoint\yii2\base\Model;
 
 /**
  * @property float $gatewayAmount
@@ -11,7 +11,7 @@ use yii\db\ActiveRecord;
  * @property string $requestDump
  * @property string|null $responseDump
  */
-class CallbackLogEntry extends ActiveRecord
+class CallbackLogEntry extends Model
 {
     public function setRequest($data)
     {

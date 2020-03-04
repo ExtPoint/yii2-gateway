@@ -2,14 +2,11 @@
 
 namespace gateway\gateways;
 
-use gateway\enums\Result;
-use gateway\enums\OrderState;
-use gateway\exceptions\InvalidArgumentException;
-use gateway\exceptions\ProcessException;
-use \gateway\exceptions\UnsupportedStateMethodException;
-use gateway\models\Link;
-use \gateway\models\Process;
-use gateway\models\Request;
+use extpoint\yii2\exceptions\UnexpectedCaseException;
+use gateway\exceptions\InvalidDatabaseStateException;
+use gateway\exceptions\RequestAuthenticityException;
+use gateway\models\Order;
+use yii\web\BadRequestHttpException;
 
 class PayPal extends Base
 {
@@ -19,7 +16,21 @@ class PayPal extends Base
      * For production: https://api.paypal.com
      * @var string
      */
-    public $apiUrl = '';
+    public $apiUrl = 'https://api.paypal.com';
+
+    /**
+     * Api url. For developers: https://www.sandbox.paypal.com/cgi-bin/webscr
+     * For production: https://www.paypal.com/cgi-bin/webscr
+     * @var string
+     */
+    public $wwwUrl = 'https://www.paypal.com/cgi-bin/webscr';
+
+    /**
+     * Api url. For developers: https://ipnpb.sandbox.paypal.com/cgi-bin/webscr
+     * For production: https://ipnpb.paypal.com/cgi-bin/webscr
+     * @var string
+     */
+    public $ipnUrl = 'https://ipnpb.paypal.com/cgi-bin/webscr';
 
     /**
      * Client ID. Example: EOJ2S-Z6OoN_le_KS1d75wsZ6y0SFdVsY9183IvxFyZp
@@ -36,163 +47,180 @@ class PayPal extends Base
     /**
      * @var string
      */
-    public $userEmail = '';
+    public $merchantEmail = '';
 
     /**
-     * @param string $id
-     * @param integer|double $amount
-     * @param string $description
-     * @param array $params
-     * @return \gateway\models\Process
-     * @throws ProcessException
+     * @var bool
      */
-    public function start($id, $amount, $description, $params)
+    public $useLocalCerts = true;
+
+    protected function internalStart($order, $noSaveParams = [])
     {
-        // Make response
-        $processModel = new Process();
-        $processModel->transactionId = $id;
+        return $this->redirectPost($this->wwwUrl, $noSaveParams + [
+            // Mandatory
+            'cmd' => '_xclick',
+            'amount' => $order->gatewayInitialAmount,
+            'business' => $this->merchantEmail,
+            'currency_code' => 'USD', // TODO: Vary currency
+            'item_name' => $order->title,
 
-        // Make and send payment call
-        $requestData = [
-            'intent' => 'sale',
-            'payer' => [
-                'payment_method' => 'paypal',
-            ],
-            'transactions' => [
-                [
-                    'amount' => [
-                        'total' => $amount,
-                        'currency' => 'USD', // @todo
-                    ],
-                    'description' => $description,
-                ],
-            ],
-            'redirect_urls' => [
-                'return_url' => $this->getSuccessUrl(),
-                'cancel_url' => $this->getFailureUrl(),
-            ],
-        ];
-        $paymentResponseData = $this->httpSend($this->apiUrl . '/v1/payments/payment', json_encode($requestData), [
-            'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer ' . $this->getAuthData()->access_token,
+            // Optional
+            'no_shipping' => 1,
+            'item_number' => $order->slug, // TODO: Generalize
+
+            'return' => $this->getSuccessUrl($order),
+            // WAS: 'rm' => 2, @see https://www.paypal.com/bh/smarthelp/article/how-do-i-use-the-rm-variable-for-website-payments-ts1011
+            'cancel_return' => $this->getFailureUrl($order),
+            'notify_url' => $this->getCallbackUrl($order),
+
+            'charset' => 'utf-8',
+            'lc' => \Yii::$app->language,
+
+            // 'image' => $xxx,
+
+            // Per request
+            // 'first_name' => $xxx,
+            // 'payer_email' => $xxx,
+            // 'contact_phone' => $xxx,
+
+            // Obsolete
+            // 'SOLUTIONTYPE' => $xxx,
+            // 'LANDINGPAGE' => $xxx,
+            // 'NOSHIPPING' => $xxx,
         ]);
-        $paymentResponseObject = $paymentResponseData ? json_decode($paymentResponseData) : null;
-        if (!$paymentResponseObject) {
-            throw new ProcessException('Wrong response data from paypal payment request.');
-        }
-
-        // Set state
-        $processModel->state = OrderState::WAIT_VERIFICATION;
-        $processModel->result = isset($paymentResponseObject->state) && $paymentResponseObject->state === 'created' ?
-            Result::SUCCEED :
-            Result::ERROR;
-
-        // Get redirect link
-        $approvalUrl = null;
-        foreach ($paymentResponseObject->links as $link) {
-            if ($link->rel === 'approval_url') {
-                $approvalUrl = $link;
-                break;
-            }
-        }
-        if (!$approvalUrl) {
-            throw new ProcessException('Not find redirect link.');
-        }
-
-        $approvalLink = new Link($approvalUrl->href);
-
-        // Save token as transaction ID
-        if ($approvalLink->getParam('token')) {
-            throw new ProcessException('Not find token in approval url.');
-        }
-        $processModel->outsideTransactionId = $approvalLink->getParam('token');
-        $this->setStateData($processModel->outsideTransactionId, $paymentResponseObject);
-
-        // Set redirect request
-        $requestModel = new Request();
-        $requestModel->params = $approvalLink->parameters;
-
-        // Clean link
-        $approvalLink->parameters = [];
-
-        $requestModel->url = (string)$approvalLink;
-        $processModel->request = $requestModel;
-
-        return $processModel;
     }
 
     /**
-     * @param \gateway\models\Request $request
-     * @return \gateway\models\Process
-     * @throws \gateway\exceptions\ProcessException
-     * @throws \gateway\exceptions\InvalidArgumentException
+     * Virtual method
+     * @param array $post
+     * @param Order $order
      */
-    public function callback(Request $request)
+    protected function verifyNotification($post, $order) {}
+
+    public function callback($logId)
     {
-        if (!isset($request->params['token']) || !isset($request->params['PayerID'])) {
-            throw new InvalidArgumentException('Invalid request arguments. Need `token` and `PayerID`.');
+        // Verify request
+        $post = $this->verifyIPN();
+
+        // Validate order
+        $order = $this->requireOrderByPublicId($post['item_number']);
+        if (!$order) {
+            throw new InvalidDatabaseStateException('Wrong order number');
         }
 
-        $outsideTransactionId = $request->params['token'];
+        // Pass control to the order-specific instance
+        $gateway = $order->getGateway();
+        if (!($gateway instanceof PayPal)) {
+            throw new UnexpectedCaseException();
+        }
+        return $gateway->callbackWithOrder($logId, $order, $post);
+    }
 
-        // Get execute link
-        $executeUrl = null;
-        $gatewayData = $this->getStateData($outsideTransactionId);
-        if ($gatewayData) {
-            foreach ($gatewayData->links as $link) {
-                if ($link->rel === 'execute') {
-                    $executeUrl = $link;
-                    break;
+    /**
+     * @param string $logId
+     * @param Order $order
+     * @param array $post
+     * @return string
+     * @throws InvalidDatabaseStateException
+     */
+    protected function callbackWithOrder($logId, $order, $post)
+    {
+        // TODO: sum, etc
+        if ($post['payment_gross'] != $order->initialAmount) throw new InvalidDatabaseStateException('Price mismatch in callback');
+        $this->verifyNotification($post, $order);
+
+        // Handle success
+        $order->processPaymentReceived($post['txn_id']);
+
+        return '';
+    }
+
+    /**
+     * Verification Function
+     * Sends the incoming post data back to PayPal using the cURL library.
+     * @return array
+     * @throws BadRequestHttpException
+     * @throws RequestAuthenticityException
+     * @see https://github.com/paypal/ipn-code-samples/blob/master/php/PaypalIPN.php
+     */
+    protected function verifyIPN()
+    {
+        if (!count($_POST)) {
+            throw new BadRequestHttpException('Missing POST Data');
+        }
+
+        $raw_post_data = file_get_contents('php://input');
+        $raw_post_array = explode('&', $raw_post_data);
+        $myPost = array();
+        foreach ($raw_post_array as $keyval) {
+            $keyval = explode('=', $keyval);
+            if (count($keyval) == 2) {
+                // Since we do not want the plus in the datetime string to be encoded to a space, we manually encode it.
+                if ($keyval[0] === 'payment_date') {
+                    if (substr_count($keyval[1], '+') === 1) {
+                        $keyval[1] = str_replace('+', '%2B', $keyval[1]);
+                    }
                 }
+                $myPost[$keyval[0]] = urldecode($keyval[1]);
             }
         }
-        if (!$executeUrl) {
-            throw new ProcessException('Not find execute link.');
+
+        // Build the body of the verification post request, adding the _notify-validate command.
+        $req = 'cmd=_notify-validate';
+        $get_magic_quotes_exists = false;
+        if (function_exists('get_magic_quotes_gpc')) {
+            $get_magic_quotes_exists = true;
+        }
+        foreach ($myPost as $key => $value) {
+            if ($get_magic_quotes_exists == true && get_magic_quotes_gpc() == 1) {
+                $value = urlencode(stripslashes($value));
+            } else {
+                $value = urlencode($value);
+            }
+            $req .= "&$key=$value";
         }
 
-        // Send execute payment request
-        $requestData = array(
-            'payer_id' => $request->params['PayerID'],
-        );
-        $paymentResponseData = $this->httpSend($executeUrl->href, json_encode($requestData), array(
-            'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer ' . $this->getAuthData()->access_token,
+        // Post the data back to PayPal, using curl. Throw exceptions if errors occur.
+        $ch = curl_init($this->ipnUrl);
+        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $req);
+        curl_setopt($ch, CURLOPT_SSLVERSION, 6);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 1);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+        // This is often required if the server is missing a global cert bundle, or is using an outdated one.
+        if ($this->useLocalCerts) {
+            curl_setopt($ch, CURLOPT_CAINFO, __DIR__ . "/PayPal.pem");
+        }
+        curl_setopt($ch, CURLOPT_FORBID_REUSE, 1);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+            'User-Agent: PHP-IPN-Verification-Script',
+            'Connection: Close',
         ));
-        $paymentResponseObject = $paymentResponseData ? json_decode($paymentResponseData) : null;
-        if (!$paymentResponseObject) {
-            throw new ProcessException('Wrong response data from paypal payment request.');
+        $res = curl_exec($ch);
+        if ( ! ($res)) {
+            $errno = curl_errno($ch);
+            $errstr = curl_error($ch);
+            curl_close($ch);
+            throw new RequestAuthenticityException("cURL error: [$errno] $errstr");
         }
 
-        return new Process([
-            'state' => OrderState::COMPLETE,
-            'outsideTransactionId' => $outsideTransactionId,
-            'result' => isset($paymentResponseObject->state) && $paymentResponseObject->state === 'approved' ?
-                Result::SUCCEED :
-                Result::ERROR,
-        ]);
-    }
-
-    /**
-     * @return mixed|null
-     * @throws ProcessException
-     */
-    private function getAuthData()
-    {
-        // Send auth request
-        $authResponseData = $this->httpSend($this->apiUrl . '/v1/oauth2/token', array(
-            'grant_type' => 'client_credentials',
-        ), array(
-            'Accept' => 'application/json',
-            'Accept-Language' => 'en_US',
-            'Authorization' => 'Basic ' . base64_encode($this->clientId . ':' . $this->secretKey),
-        ));
-        $authResponseObject = $authResponseData ? json_decode($authResponseData) : null;
-
-        if (!$authResponseObject || !$authResponseObject->access_token) {
-            throw new ProcessException('Wrong response data from paypal auth request.');
+        $info = curl_getinfo($ch);
+        $http_code = $info['http_code'];
+        if ($http_code != 200) {
+            throw new RequestAuthenticityException("PayPal responded with http code $http_code");
         }
 
-        return $authResponseObject;
-    }
+        curl_close($ch);
 
+        // Check if PayPal verifies the IPN data, and if so, return true.
+        if ($res !== 'VERIFIED') {
+            throw new RequestAuthenticityException("PayPal has not confirmed the request. Response: $res");
+        }
+
+        return $myPost;
+    }
 }

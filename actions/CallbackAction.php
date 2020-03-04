@@ -23,7 +23,7 @@ class CallbackAction extends Action
             'cookie' => $_COOKIE,
             'server' => $_SERVER,
         ]);
-        GatewayModule::saveOrPanic($logEntry);
+        $logEntry->saveOrPanic();
         $start = microtime(true);
 
         // Execute
@@ -39,7 +39,7 @@ class CallbackAction extends Action
         // Log result
         $logEntry->duration = microtime(true) - $start;
         $logEntry->setResponse($result);
-        GatewayModule::saveOrPanic($logEntry);
+        $logEntry->saveOrPanic();
 
         // Escalate result
         if (!$failed) {
