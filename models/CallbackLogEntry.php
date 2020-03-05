@@ -2,6 +2,7 @@
 namespace gateway\models;
 
 use extpoint\yii2\base\Model;
+use gateway\GatewayModule;
 
 /**
  * @property float $gatewayAmount
@@ -21,7 +22,7 @@ class CallbackLogEntry extends Model
         catch (\Throwable $e) {
             $requestDump = print_r($data, true);
         }
-        $this->requestDump = $requestDump;
+        $this->requestDump = mb_strcut($requestDump, 0, GatewayModule::getInstance()->maxDumpSize);
     }
 
     public function setResponse($data)
@@ -32,6 +33,6 @@ class CallbackLogEntry extends Model
         catch (\Throwable $e) {
             $responseDump = print_r($data, true);
         }
-        $this->responseDump = $responseDump;
+        $this->responseDump = mb_strcut($responseDump, 0, GatewayModule::getInstance()->maxDumpSize);
     }
 }

@@ -2,7 +2,9 @@
 
 namespace gateway\enums;
 
-abstract class RecurringPeriodName
+use extpoint\yii2\base\Enum;
+
+abstract class RecurringPeriodName extends Enum
 {
     const DAY = 'day';
     const WEEK = 'week';

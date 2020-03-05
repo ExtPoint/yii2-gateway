@@ -131,7 +131,10 @@ abstract class Base extends BaseObject
     public function getCallbackUrl($order = null)
     {
         $url = $this->module->callbackUrl;
-        if (!is_array($this->module->callbackUrl)) {
+        if (is_string($url)) {
+            return $url; // Might be plain debug URL
+        }
+        if (!is_array($url)) {
             throw new InvalidConfigException();
         }
         $url['gatewayName'] = $this->name;
@@ -193,6 +196,7 @@ abstract class Base extends BaseObject
     public function redirectPost($url, $postFields)
     {
         $formId = 'payment-redirect';
+        $lineBreak = YII_DEBUG ? "\n" : '';
 
         $result = Html::tag(
             'div',
@@ -200,13 +204,13 @@ abstract class Base extends BaseObject
             ['class' => 'alert alert-info']
         );
 
-        $result .= Html::beginForm($url, 'post', ['id' => $formId]);
+        $result .= Html::beginForm($url, 'post', ['id' => $formId]) . $lineBreak;
 
         foreach ($postFields as $field => $value) {
-            $result .= Html::hiddenInput($field, $value);
+            $result .= Html::hiddenInput($field, $value) . $lineBreak;
         }
 
-        $result .= Html::endForm();
+        $result .= Html::endForm() . $lineBreak;
         $result .= "<script>\ndocument.getElementById('$formId').submit();\n</script>";
 
         return $result;

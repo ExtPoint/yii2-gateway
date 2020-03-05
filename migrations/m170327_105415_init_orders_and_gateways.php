@@ -11,7 +11,7 @@ class m170327_105415_init_orders_and_gateways extends Migration
         $this->createTable('gateways_orders', [
             'id' => 'pk',
             // Suggested // 'userId' => 'int NOT NULL',
-            'state' => "enum('ready', 'complete', 'cancelled') NOT NULL DEFAULT 'ready'",
+            'state' => \gateway\enums\OrderState::toMysqlEnum('ready'),
             'initialAmount' => $this->money(19, $moneyPrecision)->notNull()->defaultValue(0),
             'recurringAmount' => $this->money(19, $moneyPrecision)->notNull()->defaultValue(0),
             'recurringPeriodName' => "enum('day', 'week', 'month', 'year') NULL DEFAULT NULL",

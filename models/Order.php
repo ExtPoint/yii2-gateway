@@ -181,22 +181,41 @@ abstract class Order extends Model
         return null;
     }
 
-
-    /////// Scenario methods ///////////////////////////
-
     /**
      * @param string $externalTransactionId
-     * @param string|null $transactionNotes
-     * @param string|null $logId
-     * @param array $gatewayExtra
+     * @return Transaction|null
      */
-    public function processPaymentReceived($externalTransactionId, $logId = null, $transactionNotes = null, $gatewayExtra = [])
+    public function prepareTransaction($externalTransactionId)
     {
         /** @var Transaction $transactionClass */
         $transactionClass = GatewayModule::getInstance()->transactionClassName;
         // Skip already handled events
         $transaction = $transactionClass::findOne(['externalEventId' => $externalTransactionId]);
         if ($transaction) {
+            return null;
+        }
+
+        return new $transactionClass();
+    }
+
+    /////// Scenario methods ///////////////////////////
+
+    /**
+     * @param string $externalTransactionId
+     * @param string|null $logId
+     * @param string|null $externalSubscriptionId
+     * @param string|null $transactionNotes
+     * @param array $gatewayExtra
+     */
+    public function processPaymentReceived(
+        $externalTransactionId,
+        $logId = null,
+        $externalSubscriptionId = null,
+        $transactionNotes = null,
+        $gatewayExtra = []
+    ) {
+        $transaction = $this->prepareTransaction($externalTransactionId);
+        if (!$transaction) {
             return;
         }
 
@@ -206,22 +225,39 @@ abstract class Order extends Model
             ->exists();
 
         // Log
-        /** @var Transaction $transaction */
-        $transaction = new $transactionClass();
         $transaction->kind = TransactionKind::PAYMENT_RECEIVED;
         $transaction->logId = $logId;
         $transaction->orderId = $this->id;
         $transaction->notes = $transactionNotes;
         $transaction->sum = $isInitial ? $this->initialAmount : $this->recurringAmount;
         $transaction->externalEventId = $externalTransactionId;
+        $transaction->externalSubscriptionId = $externalSubscriptionId;
         if ($gatewayExtra) {
             $transaction->gatewayExtra = $gatewayExtra;
         }
         $transaction->saveOrPanic();
 
         // Complete only on single payment
-        if (!$this->recurringAmount) {
-            $this->state = OrderState::COMPLETE;
+        if ($isInitial) {
+            if (!$this->recurringAmount) {
+                if ($this->state !== OrderState::READY) {
+                    \Yii::warning("Received a payment for a non-recurring order #$this->id in $this->state");
+                }
+                $this->state = OrderState::COMPLETE;
+                $this->saveOrPanic();
+            } else {
+                $this->markSubscriptionStarted();
+            }
+        }
+    }
+
+    public function markSubscriptionStarted()
+    {
+        if ($this->state !== OrderState::SUBSCRIPTION_ACTIVE) {
+            if ($this->state !== OrderState::READY) {
+                \Yii::warning("Received a payment for a recurring order #$this->id in $this->state");
+            }
+            $this->state = OrderState::SUBSCRIPTION_ACTIVE;
             $this->saveOrPanic();
         }
     }

@@ -3,9 +3,13 @@
 namespace gateway\gateways;
 
 use extpoint\yii2\exceptions\UnexpectedCaseException;
+use gateway\enums\RecurringPeriodName;
+use gateway\enums\TransactionKind;
 use gateway\exceptions\InvalidDatabaseStateException;
 use gateway\exceptions\RequestAuthenticityException;
+use gateway\GatewayModule;
 use gateway\models\Order;
+use yii\helpers\Inflector;
 use yii\web\BadRequestHttpException;
 
 class PayPal extends Base
@@ -54,40 +58,72 @@ class PayPal extends Base
      */
     public $useLocalCerts = true;
 
+    public function supportsRecurring()
+    {
+        return true;
+    }
+
     protected function internalStart($order, $noSaveParams = [])
     {
-        return $this->redirectPost($this->wwwUrl, $noSaveParams + [
-            // Mandatory
-            'cmd' => '_xclick',
-            'amount' => $order->gatewayInitialAmount,
-            'business' => $this->merchantEmail,
-            'currency_code' => 'USD', // TODO: Vary currency
-            'item_name' => $order->title,
+        if (!$order->recurringAmount) {
+            $varParams = [
+                'cmd' => '_xclick',
+                'amount' => $order->gatewayInitialAmount,
+            ];
+        } else {
+            $varParams = [
+                'cmd' => '_xclick-subscriptions',
+                'a3' => $order->gatewayRecurringAmount,
+                't3' => static::getPayPalPeriodName($order->recurringPeriodName),
+                'p3' => $order->recurringPeriodScale,
 
-            // Optional
-            'no_shipping' => 1,
-            'item_number' => $order->slug, // TODO: Generalize
+                'src' => 1,
+                'sra' => 1,
+            ];
 
-            'return' => $this->getSuccessUrl($order),
-            // WAS: 'rm' => 2, @see https://www.paypal.com/bh/smarthelp/article/how-do-i-use-the-rm-variable-for-website-payments-ts1011
-            'cancel_return' => $this->getFailureUrl($order),
-            'notify_url' => $this->getCallbackUrl($order),
+            // Add different initialAmount
+            if (abs($order->gatewayInitialAmount - $order->gatewayRecurringAmount) > GatewayModule::MONEY_EPSILON) {
+                $varParams += [
+                    'a1' => $order->gatewayInitialAmount,
+                    't1' => static::getPayPalPeriodName($order->recurringPeriodName),
+                    'p1' => $order->recurringPeriodScale,
+                ];
+            }
+        }
 
-            'charset' => 'utf-8',
-            'lc' => \Yii::$app->language,
+        return $this->redirectPost(
+            $this->wwwUrl,
+            $noSaveParams + $varParams + [
+                // Mandatory
+                'business' => $this->merchantEmail,
+                'currency_code' => 'USD', // TODO: Vary currency
+                'item_name' => $order->title,
 
-            // 'image' => $xxx,
+                // Optional
+                'no_shipping' => 1,
+                'item_number' => $order->slug, // TODO: Generalize
 
-            // Per request
-            // 'first_name' => $xxx,
-            // 'payer_email' => $xxx,
-            // 'contact_phone' => $xxx,
+                'return' => $this->getSuccessUrl($order),
+                // WAS: 'rm' => 2, @see https://www.paypal.com/bh/smarthelp/article/how-do-i-use-the-rm-variable-for-website-payments-ts1011
+                'cancel_return' => $this->getFailureUrl($order),
+                'notify_url' => $this->getCallbackUrl($order),
 
-            // Obsolete
-            // 'SOLUTIONTYPE' => $xxx,
-            // 'LANDINGPAGE' => $xxx,
-            // 'NOSHIPPING' => $xxx,
-        ]);
+                'charset' => 'utf-8',
+                'lc' => \Yii::$app->language,
+
+                // 'image' => $xxx,
+
+                // Per request
+                // 'first_name' => $xxx,
+                // 'payer_email' => $xxx,
+                // 'contact_phone' => $xxx,
+
+                // Obsolete
+                // 'SOLUTIONTYPE' => $xxx,
+                // 'LANDINGPAGE' => $xxx,
+                // 'NOSHIPPING' => $xxx,
+            ]
+        );
     }
 
     /**
@@ -102,37 +138,79 @@ class PayPal extends Base
         // Verify request
         $post = $this->verifyIPN();
 
-        // Validate order
-        $order = $this->requireOrderByPublicId($post['item_number']);
-        if (!$order) {
-            throw new InvalidDatabaseStateException('Wrong order number');
+        // Dispatch
+        $method = 'callbackOn' . Inflector::camelize($post['txn_type']);
+        if (!method_exists($this, $method)) {
+            return '';
         }
+
+        // Require order
+        $order = $this->requireOrderByPublicId($post['item_number']);
 
         // Pass control to the order-specific instance
         $gateway = $order->getGateway();
         if (!($gateway instanceof PayPal)) {
             throw new UnexpectedCaseException();
         }
-        return $gateway->callbackWithOrder($logId, $order, $post);
+        $gateway->verifyNotification($post, $order); // Virtual slot
+        $gateway->$method($logId, $order, $post);
+
+        return '';
     }
 
     /**
      * @param string $logId
      * @param Order $order
      * @param array $post
-     * @return string
-     * @throws InvalidDatabaseStateException
+     * @throws \Throwable
      */
-    protected function callbackWithOrder($logId, $order, $post)
+    protected function callbackOnWebAccept($logId, $order, $post)
     {
         // TODO: sum, etc
         if ($post['payment_gross'] != $order->initialAmount) throw new InvalidDatabaseStateException('Price mismatch in callback');
-        $this->verifyNotification($post, $order);
 
         // Handle success
-        $order->processPaymentReceived($post['txn_id']);
+        $order->processPaymentReceived($post['txn_id'], $logId, $post['subscr_id'] ?? null);
+    }
 
-        return '';
+    /**
+     * @param string $logId
+     * @param Order $order
+     * @param array $post
+     * @throws \Throwable
+     */
+    protected function callbackOnSubscrPayment($logId, $order, $post)
+    {
+        $this->callbackOnWebAccept($logId, $order, $post);
+    }
+
+    /**
+     * @param string $logId
+     * @param Order $order
+     * @param array $post
+     * @throws \Throwable
+     */
+    protected function callbackOnSubscrSignup($logId, $order, $post)
+    {
+        if (empty($post['subscr_id'])) {
+            throw new UnexpectedCaseException();
+        }
+
+        // Log transaction
+        $transaction = $order->prepareTransaction($post['subscr_id']);
+        if (!$transaction) {
+            return;
+        }
+        $transaction->kind = TransactionKind::SUBSCRIPTION_STARTED;
+        $transaction->logId = $logId;
+        $transaction->orderId = $order->id;
+        $transaction->sum = null;
+        $transaction->externalEventId = 'start ' . $post['subscr_id'];
+        $transaction->externalSubscriptionId = $post['subscr_id'];
+        $transaction->saveOrPanic();
+
+        // Mark started
+        $order->markSubscriptionStarted();
     }
 
     /**
@@ -222,5 +300,17 @@ class PayPal extends Base
         }
 
         return $myPost;
+    }
+
+    private static function getPayPalPeriodName($value)
+    {
+        switch ($value) {
+            case RecurringPeriodName::MONTH:
+                return 'M';
+            case RecurringPeriodName::YEAR:
+                return 'A';
+            default:
+                throw new UnexpectedCaseException();
+        }
     }
 }

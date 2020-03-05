@@ -13,6 +13,8 @@ use yii\log\Logger;
 
 class GatewayModule extends Module
 {
+    const MONEY_EPSILON = 1e-10; // Bitcoin is 8 digit and this must be less, but not less than 1e-16
+
     /**
      * @var string
      */
@@ -62,6 +64,8 @@ class GatewayModule extends Module
      * @var CallbackLogEntry
      */
     public $callbackLogEntryClassName;
+
+    public $maxDumpSize = 2097152; // 2MB
 
     /**
      * @return \gateway\GatewayModule

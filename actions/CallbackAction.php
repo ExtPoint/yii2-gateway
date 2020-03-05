@@ -53,6 +53,6 @@ class CallbackAction extends Action
         }
 
         // Regular exception flow
-        throw new $result;
+        throw $result;
     }
 }

@@ -2,7 +2,9 @@
 
 namespace gateway\enums;
 
-abstract class OrderState
+use extpoint\yii2\base\Enum;
+
+abstract class OrderState extends Enum
 {
     /** Waiting for payment */
     const READY = 'ready';
