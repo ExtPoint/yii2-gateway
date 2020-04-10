@@ -64,7 +64,7 @@ class YandexKassa extends Base
         // Remote url
         $url = $this->url ?: ($this->testMode ? 'https://demomoney.yandex.ru/eshop.xml' : 'https://money.yandex.ru/eshop.xml');
 
-        return $this->redirectPost(
+        return static::redirectPost(
             $url,
             [
                 'shopId' => $this->shopId,

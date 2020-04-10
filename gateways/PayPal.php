@@ -91,7 +91,7 @@ class PayPal extends Base
             }
         }
 
-        return $this->redirectPost(
+        return static::redirectPost(
             $this->wwwUrl,
             $noSaveParams + $varParams + [
                 // Mandatory

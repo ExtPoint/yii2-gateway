@@ -24,7 +24,8 @@
         "extpoint/yii2-core": "^2.4.12"
     },
     "require-dev": {
-        "phpunit/phpunit": "3.7.*"
+        "php":">=7.3.0",
+        "phpunit/phpunit": "9.*"
     },
     "suggest": {
         "braintree/braintree_php": "^3.22"

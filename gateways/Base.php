@@ -193,10 +193,9 @@ abstract class Base extends BaseObject
      * @param string[] $postFields
      * @return string|Response
      */
-    public function redirectPost($url, $postFields)
+    public static function redirectPost($url, $postFields)
     {
         $formId = 'payment-redirect';
-        $lineBreak = YII_DEBUG ? "\n" : '';
 
         $result = Html::tag(
             'div',
@@ -204,13 +203,13 @@ abstract class Base extends BaseObject
             ['class' => 'alert alert-info']
         );
 
-        $result .= Html::beginForm($url, 'post', ['id' => $formId]) . $lineBreak;
+        $result .= Html::beginForm($url, 'post', ['id' => $formId]) . "\n";
 
         foreach ($postFields as $field => $value) {
-            $result .= Html::hiddenInput($field, $value) . $lineBreak;
+            $result .= Html::hiddenInput($field, $value) . "\n";
         }
 
-        $result .= Html::endForm() . $lineBreak;
+        $result .= Html::endForm() . "\n";
         $result .= "<script>\ndocument.getElementById('$formId').submit();\n</script>";
 
         return $result;

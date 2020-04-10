@@ -1,5 +1,6 @@
 /vendor
 /.idea
 phpunit.xml
+/.phpunit.result.cache
 composer.lock
 spread.sh
