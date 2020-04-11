@@ -77,7 +77,7 @@ class PayPalTest extends AppTestCase
             'name' => 'paypal',
             'module' => $this->module,
             'merchantEmail' => 'business@example.com',
-            'testCallbackPost' => $this->readJsonFixture('one-time-payment-callback.json'),
+            'testCallbackPost' => $this->readJsonFixture('paypal/one-time-payment-callback.json'),
         ]);
 
         $order = $this->createModelMock('\gateway\models\Order', [
@@ -199,7 +199,7 @@ class PayPalTest extends AppTestCase
         $logId = 6;
 
         // Act
-        $gateway->testCallbackPost = $this->readJsonFixture('subscription-created-callback.json');
+        $gateway->testCallbackPost = $this->readJsonFixture('paypal/subscription-created-callback.json');
         $response = $gateway->callback($logId);
 
         // Assert
@@ -255,7 +255,7 @@ class PayPalTest extends AppTestCase
 
         // Act
         // Note: this could come either before or after the subscription sign event
-        $gateway->testCallbackPost = $this->readJsonFixture('subscription-payment-1-callback.json');
+        $gateway->testCallbackPost = $this->readJsonFixture('paypal/subscription-payment-1-callback.json');
         $response = $gateway->callback($logId);
 
         // Assert
