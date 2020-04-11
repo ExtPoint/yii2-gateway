@@ -70,4 +70,14 @@ class AppTestCase extends TestCase
             }
         );
     }
+
+    protected function trackMagicProperties(MockObject $object, &$result)
+    {
+        $result = [];
+        $object->method('__set')->willReturnCallback(
+            function ($name, $value) use (&$result) {
+                $result[$name] = $value;
+            }
+        );
+    }
 }

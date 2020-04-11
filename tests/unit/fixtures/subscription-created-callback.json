@@ -1,0 +1,35 @@
+{
+  "mc_amount1": "50.00",
+  "amount1": "50.00",
+  "period1": "2 M",
+
+  "mc_amount3": "100.00",
+  "amount3": "100.00",
+  "period3": "2 M",
+  "mc_currency": "USD",
+  "recurring": "1",
+  "reattempt": "1",
+
+  "item_name": "Sample Product",
+  "item_number": "order-slug",
+
+  "txn_type": "subscr_signup",
+  "subscr_id": "I-HEVL2T810CFE",
+  "subscr_date": "18:51:38 Mar 04, 2020 PST",
+  "verify_sign": "AWYxjS6LEFCeGqJDu35ZiF0NsD2FAw3bka9qORlPUKExGhFWeGgcCKee",
+
+  "charset": "windows-1252",
+  "notify_version": "3.9",
+  "test_ipn": "1",
+  "ipn_track_id": "7f0ae15a66db",
+
+  "payer_id": "ELZYNHAKMJV5Q",
+  "payer_status": "verified",
+  "payer_email": "sb-crrpj1134786@personal.example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "residence_country": "RU",
+
+  "business": "business@example.com",
+  "receiver_email": "business@example.com"
+}

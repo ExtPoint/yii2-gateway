@@ -3,6 +3,7 @@
 namespace gateway\tests\unit;
 
 use gateway\enums\RecurringPeriodName;
+use gateway\enums\TransactionKind;
 use gateway\GatewayModule;
 use gateway\gateways\Base;
 use gateway\gateways\PayPal;
@@ -104,6 +105,167 @@ class PayPalTest extends AppTestCase
                 '0HY72019N63633221', // $externalTransactionId <- POST txn_id
                 $logId,
                 null, // $externalSubscriptionId <- POST subscr_id ?? null
+                null, // $transactionNotes, default
+                [], // $gatewayExtra, default
+            ],
+        ], $processPaymentReceivedCalls);
+    }
+
+    public function testSubscriptionStart()
+    {
+        // Arrange
+        $gateway = new PayPal([
+            'enable' => true,
+            'testMode' => false,
+            'name' => 'paypal',
+            'module' => $this->module,
+            'merchantEmail' => 'business@example.com',
+        ]);
+
+        /** @var Order $order */
+        $order = $this->createModelMock('\gateway\models\Order', [
+            'gatewayInitialAmount' => 50 + self::POSSIBLE_ROUNDING_MISTAKE,
+            'gatewayRecurringAmount' => 100 + self::POSSIBLE_ROUNDING_MISTAKE,
+            'recurringPeriodScale' => 2,
+            'recurringPeriodName' => RecurringPeriodName::MONTH,
+            'title' => 'Sample Product',
+            'slug' => 'order-slug',
+        ]);
+
+        // Act
+        $response = $gateway->start($order);
+
+        // Assert
+        $this->assertEquals(
+            Base::redirectPost('https://www.paypal.com/cgi-bin/webscr', [
+                'cmd' => '_xclick-subscriptions',
+                'a3' => '100.00', // Second and further months
+                't3' => 'M', // recurringPeriodName
+                'p3' => '2', // recurringPeriodScale
+                'src' => 1,
+                'sra' => 1,
+                'a1' => '50.00', // First months
+                't1' => 'M', // recurringPeriodName
+                'p1' => '2', // recurringPeriodScale
+                'business' => 'business@example.com',
+                'currency_code' => 'USD',
+                'item_name' => 'Sample Product',
+                'no_shipping' => 1,
+                'item_number' => 'order-slug',
+                'return' => 'https://example.com/success/',
+                'cancel_return' => 'https://example.com/failure/',
+                'notify_url' => 'https://example.com/callback/',
+                'charset' => 'utf-8',
+                'lc' => 'en-US',
+            ]),
+            $response
+        );
+    }
+
+    public function testSubscriptionCreatedCallback()
+    {
+        // Arrange
+        $gateway = new PayPalPartiallyMocked([
+            'enable' => true,
+            'testMode' => false,
+            'name' => 'paypal',
+            'module' => $this->module,
+            'merchantEmail' => 'business@example.com',
+        ]);
+
+        $order = $this->createModelMock('\gateway\models\Order', [
+            'id' => 5,
+            'gatewayInitialAmount' => 50 + self::POSSIBLE_ROUNDING_MISTAKE,
+            'gatewayRecurringAmount' => 100 + self::POSSIBLE_ROUNDING_MISTAKE,
+            'recurringPeriodScale' => 2,
+            'recurringPeriodName' => RecurringPeriodName::MONTH,
+            'title' => 'Sample Product',
+            'slug' => 'order-slug',
+        ]);
+        $order->method('getGateway')->willReturn($gateway);
+        $this->trackCalls($order, 'markSubscriptionStarted', $markSubscriptionStartedCalls);
+
+        $newTransaction = $this->createSafeMock('\gateway\models\Transaction');
+        $this->trackMagicProperties($newTransaction, $newTransactionProps);
+        $this->trackCalls($newTransaction, 'saveOrPanic', $newTransactionSaveCalls);
+        $order->method('prepareTransaction')->willReturn($newTransaction);
+
+        /** @var Order $order */
+        $orderClass = $this->createStaticClassMock([
+            'findByPublicId' => $order,
+        ]);
+        $this->module->orderClassName = $orderClass;
+
+        $logId = 6;
+
+        // Act
+        $gateway->testCallbackPost = $this->readJsonFixture('subscription-created-callback.json');
+        $response = $gateway->callback($logId);
+
+        // Assert
+        $this->assertEquals('', $response);
+
+        $this->assertEquals([
+            'kind' => TransactionKind::SUBSCRIPTION_STARTED,
+            'logId' => $logId,
+            'orderId' => 5,
+            'sum' => null,
+            'externalEventId' => 'start I-HEVL2T810CFE',
+            'externalSubscriptionId' => 'I-HEVL2T810CFE',
+        ], $newTransactionProps);
+        $this->assertEquals([
+            [null],
+        ], $newTransactionSaveCalls);
+
+        $this->assertEquals([
+            [], // TODO: Consider unification with one time
+        ], $markSubscriptionStartedCalls);
+    }
+
+    public function testSubscriptionPaymentCallback()
+    {
+        // Arrange
+        $gateway = new PayPalPartiallyMocked([
+            'enable' => true,
+            'testMode' => false,
+            'name' => 'paypal',
+            'module' => $this->module,
+            'merchantEmail' => 'business@example.com',
+        ]);
+
+        $order = $this->createModelMock('\gateway\models\Order', [
+            'id' => 5,
+            'gatewayInitialAmount' => 50 + self::POSSIBLE_ROUNDING_MISTAKE,
+            'gatewayRecurringAmount' => 100 + self::POSSIBLE_ROUNDING_MISTAKE,
+            'recurringPeriodScale' => 2,
+            'recurringPeriodName' => RecurringPeriodName::MONTH,
+            'title' => 'Sample Product',
+            'slug' => 'order-slug',
+        ]);
+        $order->method('getGateway')->willReturn($gateway);
+        $this->trackCalls($order, 'processPaymentReceived', $processPaymentReceivedCalls);
+
+        /** @var Order $order */
+        $orderClass = $this->createStaticClassMock([
+            'findByPublicId' => $order,
+        ]);
+        $this->module->orderClassName = $orderClass;
+
+        $logId = 6;
+
+        // Act
+        // Note: this could come either before or after the subscription sign event
+        $gateway->testCallbackPost = $this->readJsonFixture('subscription-payment-1-callback.json');
+        $response = $gateway->callback($logId);
+
+        // Assert
+        $this->assertEquals('', $response);
+
+        $this->assertEquals([
+            [
+                '0HY72019N63633221', // $externalTransactionId <- POST txn_id
+                $logId,
+                'I-HEVL2T810CFE', // $externalSubscriptionId <- POST subscr_id
                 null, // $transactionNotes, default
                 [], // $gatewayExtra, default
             ],

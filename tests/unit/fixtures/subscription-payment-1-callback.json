@@ -1,0 +1,37 @@
+{
+  "mc_gross": "50.00",
+  "mc_fee": "2.10",
+  "payment_gross": "50.00",
+  "payment_fee": "2.10",
+  "mc_currency": "USD",
+
+  "item_name": "Sample Product",
+  "item_number": "order-slug",
+
+  "txn_type": "subscr_payment",
+  "txn_id": "0HY72019N63633221",
+  "subscr_id": "I-HEVL2T810CFE",
+  "payment_date": "02:03:27 Mar 03, 2020 PST",
+  "payment_status": "Completed",
+  "verify_sign": "AWYxjS6LEFCeGqJDu35ZiF0NsD2FAw3bka9qORlPUKExGhFWeGgcCKee",
+
+  "payment_type": "instant",
+  "protection_eligibility": "Ineligible",
+  "charset": "windows-1252",
+  "notify_version": "3.9",
+  "test_ipn": "1",
+  "transaction_subject": "Sample Product",
+  "ipn_track_id": "7f0ae15a66db",
+
+  "payer_id": "ELZYNHAKMJV5Q",
+  "payer_status": "verified",
+  "payer_email": "sb-crrpj1134786@personal.example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "residence_country": "RU",
+  "contact_phone": "939-546-2325",
+
+  "business": "business@example.com",
+  "receiver_email": "business@example.com",
+  "receiver_id": "E6VJZMQN8MEJJ"
+}
