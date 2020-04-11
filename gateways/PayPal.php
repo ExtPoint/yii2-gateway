@@ -167,7 +167,7 @@ class PayPal extends Base
     protected function callbackOnWebAccept($logId, $order, $post)
     {
         // TODO: sum, etc
-        if ($post['payment_gross'] != $order->initialAmount) throw new InvalidDatabaseStateException('Price mismatch in callback');
+        if ($post['payment_gross'] != $order->gatewayInitialAmount) throw new InvalidDatabaseStateException('Price mismatch in callback');
 
         // Handle success
         $order->processPaymentReceived($post['txn_id'], $logId, $post['subscr_id'] ?? null);

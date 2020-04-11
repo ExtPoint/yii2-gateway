@@ -7,36 +7,31 @@ use gateway\gateways\Base;
 use gateway\gateways\PayPal;
 use gateway\models\Order;
 use gateway\tests\unit\helpers\AppTestCase;
+use PHPUnit\Framework\MockObject\MockObject;
 
-class PayPalTest extends AppTestCase {
+class PayPalTest extends AppTestCase
+{
+    /** @var GatewayModule|MockObject */
+    private $module;
 
-    public function testPay() {
+    /** @var MockObject */
+    private $i18nMock;
+
+    /** @var MockObject */
+    private $appMock;
+
+    /** @var MockObject */
+    private $urlMock;
+
+    public function testOneTimePaymentStart()
+    {
         // Arrange
-        $module = $this->createSafeMock('gateway\GatewayModule');
-        $module->method('getEffectiveSuccessUrl')->willReturn('https://example.com/success/');
-        $module->method('getEffectiveFailureUrl')->willReturn('https://example.com/failure/');
-        /** @var GatewayModule $module */
-        $module->callbackUrl = 'https://example.com/callback/';
-
-        $i18nMock = $this->createSafeMock('\yii\i18n\I18N');
-        $i18nMock->method('translate')->willReturnCallback(function ($category, $message) { return $message; });
-
-        $appMock = $this->createSafeMock('\yii\web\Application');
-        $appMock->method('getI18n')->willReturn($i18nMock);
-        $appMock->method('getRequest')->willReturn(null);
-        \Yii::$app = $appMock;
-
-        $urlMock = $this->mockStaticClass('\yii\helpers\Url');
-        $urlMock->method('to')->willReturnMap([
-            // Html form
-            ['https://www.paypal.com/cgi-bin/webscr', 'https://www.paypal.com/cgi-bin/webscr'],
-        ]);
-
         $gateway = new PayPal([
             'enable' => true,
             'testMode' => false,
             'name' => 'paypal',
-            'module' => $module,
+            'module' => $this->module,
+            'merchantEmail' => 'business@example.com',
         ]);
 
         /** @var Order $order */
@@ -54,7 +49,7 @@ class PayPalTest extends AppTestCase {
             Base::redirectPost('https://www.paypal.com/cgi-bin/webscr', [
                 'cmd' => '_xclick',
                 'amount' => 100,
-                'business' => '',
+                'business' => 'business@example.com',
                 'currency_code' => 'USD',
                 'item_name' => 'Sample Product',
                 'no_shipping' => 1,
@@ -67,5 +62,80 @@ class PayPalTest extends AppTestCase {
             ]),
             $response
         );
+    }
+
+    public function testOneTimePaymentCallback()
+    {
+        // Arrange
+        $gateway = new PayPalPartiallyMocked([
+            'enable' => true,
+            'testMode' => false,
+            'name' => 'paypal',
+            'module' => $this->module,
+            'merchantEmail' => 'business@example.com',
+            'testCallbackPost' => $this->readJsonFixture('one-time-payment-callback.json'),
+        ]);
+
+        $order = $this->createModelMock('\gateway\models\Order', [
+            'gatewayInitialAmount' => 100,
+            'title' => 'Sample Product',
+            'slug' => 'order-slug',
+        ]);
+        $order->method('getGateway')->willReturn($gateway);
+        $this->trackCalls($order, 'processPaymentReceived', $processPaymentReceivedCalls);
+        /** @var Order $order */
+        $orderClass = $this->createStaticClassMock([
+            'findByPublicId' => $order,
+        ]);
+        $this->module->orderClassName = $orderClass;
+
+        $logId = 6;
+
+        // Act
+        $response = $gateway->callback($logId);
+
+        // Assert
+        $this->assertEquals('', $response);
+        $this->assertEquals([
+            [
+                '0HY72019N63633221', // $externalTransactionId <- POST txn_id
+                $logId,
+                null, // $externalSubscriptionId <- POST subscr_id ?? null
+                null, // $transactionNotes, default
+                [], // $gatewayExtra, default
+            ],
+        ], $processPaymentReceivedCalls);
+    }
+
+    protected function setUp(): void
+    {
+        $this->module = $this->createSafeMock('gateway\GatewayModule');
+        $this->module->method('getEffectiveSuccessUrl')->willReturn('https://example.com/success/');
+        $this->module->method('getEffectiveFailureUrl')->willReturn('https://example.com/failure/');
+        $this->module->callbackUrl = 'https://example.com/callback/';
+
+        $this->i18nMock = $this->createSafeMock('\yii\i18n\I18N');
+        $this->i18nMock->method('translate')->willReturnCallback(function ($category, $message) { return $message; });
+
+        $this->appMock = $this->createSafeMock('\yii\web\Application');
+        $this->appMock->method('getI18n')->willReturn($this->i18nMock);
+        $this->appMock->method('getRequest')->willReturn(null);
+        \Yii::$app = $this->appMock;
+
+        $this->urlMock = $this->mockStaticClass('\yii\helpers\Url');
+        $this->urlMock->method('to')->willReturnMap([
+            // Html form passes any URLs trough Url::to()
+            ['https://www.paypal.com/cgi-bin/webscr', 'https://www.paypal.com/cgi-bin/webscr'],
+        ]);
+    }
+}
+
+class PayPalPartiallyMocked extends PayPal
+{
+    public $testCallbackPost;
+
+    protected function verifyIPN()
+    {
+        return $this->testCallbackPost;
     }
 }

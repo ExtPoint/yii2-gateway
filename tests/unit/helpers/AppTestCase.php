@@ -5,8 +5,8 @@ namespace gateway\tests\unit\helpers;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
-class AppTestCase extends TestCase {
-
+class AppTestCase extends TestCase
+{
     protected function createSafeMock(string $originalClassName): MockObject
     {
         return $this->getMockBuilder($originalClassName)
@@ -18,7 +18,8 @@ class AppTestCase extends TestCase {
             ->getMock();
     }
 
-    protected function createModelMock(string $className, array $attributes): MockObject {
+    protected function createModelMock(string $className, array $attributes): MockObject
+    {
         $mock = $this->createSafeMock($className);
 
         $mock->method('save')->willReturn(true);
@@ -32,9 +33,41 @@ class AppTestCase extends TestCase {
         return $mock;
     }
 
-    protected function mockStaticClass(string $className): MockObject {
+    private static $lastMockId = 0;
+
+    protected function createStaticClassMock(array $methods): string
+    {
+        $className = '\gateway\tests\unit\mocks\Mock' . (++self::$lastMockId);
+        MockStatic::installMock($className, array_keys($methods));
+        $o = $this->mockStaticClass($className);
+        foreach ($methods as $method => $return) {
+            $o->method($method)->willReturn($return);
+        }
+        return $className;
+    }
+
+    protected function mockStaticClass(string $className): MockObject
+    {
         $o = $this->createSafeMock($className . 'MockStatic');
         $className::$mock = $o;
         return $o;
+    }
+
+    protected function readJsonFixture($filename)
+    {
+        return json_decode(
+            file_get_contents(__DIR__ . '/../fixtures/' . $filename),
+            true
+        );
+    }
+
+    protected function trackCalls(MockObject $object, string $method, &$calls)
+    {
+        $calls = [];
+        $object->method($method)->willReturnCallback(
+            function (...$arguments) use (&$calls) {
+                $calls[] = $arguments;
+            }
+        );
     }
 }
