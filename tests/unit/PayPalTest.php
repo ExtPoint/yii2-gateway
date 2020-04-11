@@ -2,6 +2,7 @@
 
 namespace gateway\tests\unit;
 
+use gateway\enums\RecurringPeriodName;
 use gateway\GatewayModule;
 use gateway\gateways\Base;
 use gateway\gateways\PayPal;
@@ -11,6 +12,8 @@ use PHPUnit\Framework\MockObject\MockObject;
 
 class PayPalTest extends AppTestCase
 {
+    const POSSIBLE_ROUNDING_MISTAKE = GatewayModule::MONEY_EPSILON / 2;
+
     /** @var GatewayModule|MockObject */
     private $module;
 
@@ -36,7 +39,7 @@ class PayPalTest extends AppTestCase
 
         /** @var Order $order */
         $order = $this->createModelMock('\gateway\models\Order', [
-            'gatewayInitialAmount' => 100,
+            'gatewayInitialAmount' => 100 + self::POSSIBLE_ROUNDING_MISTAKE,
             'title' => 'Sample Product',
             'slug' => 'order-slug',
         ]);
@@ -48,7 +51,7 @@ class PayPalTest extends AppTestCase
         $this->assertEquals(
             Base::redirectPost('https://www.paypal.com/cgi-bin/webscr', [
                 'cmd' => '_xclick',
-                'amount' => 100,
+                'amount' => '100.00',
                 'business' => 'business@example.com',
                 'currency_code' => 'USD',
                 'item_name' => 'Sample Product',
@@ -77,7 +80,7 @@ class PayPalTest extends AppTestCase
         ]);
 
         $order = $this->createModelMock('\gateway\models\Order', [
-            'gatewayInitialAmount' => 100,
+            'gatewayInitialAmount' => 100 + self::POSSIBLE_ROUNDING_MISTAKE,
             'title' => 'Sample Product',
             'slug' => 'order-slug',
         ]);

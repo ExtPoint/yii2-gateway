@@ -65,15 +65,15 @@ class PayPal extends Base
 
     protected function internalStart($order, $noSaveParams = [])
     {
-        if (!$order->recurringAmount) {
+        if (!$order->gatewayRecurringAmount) {
             $varParams = [
                 'cmd' => '_xclick',
-                'amount' => $order->gatewayInitialAmount,
+                'amount' => sprintf('%.2F', $order->gatewayInitialAmount),
             ];
         } else {
             $varParams = [
                 'cmd' => '_xclick-subscriptions',
-                'a3' => $order->gatewayRecurringAmount,
+                'a3' => sprintf('%.2F', $order->gatewayRecurringAmount),
                 't3' => static::getPayPalPeriodName($order->recurringPeriodName),
                 'p3' => $order->recurringPeriodScale,
 
@@ -84,7 +84,7 @@ class PayPal extends Base
             // Add different initialAmount
             if (abs($order->gatewayInitialAmount - $order->gatewayRecurringAmount) > GatewayModule::MONEY_EPSILON) {
                 $varParams += [
-                    'a1' => $order->gatewayInitialAmount,
+                    'a1' => sprintf('%.2F', $order->gatewayInitialAmount),
                     't1' => static::getPayPalPeriodName($order->recurringPeriodName),
                     'p1' => $order->recurringPeriodScale,
                 ];
@@ -166,8 +166,10 @@ class PayPal extends Base
      */
     protected function callbackOnWebAccept($logId, $order, $post)
     {
-        // TODO: sum, etc
-        if ($post['payment_gross'] != $order->gatewayInitialAmount) throw new InvalidDatabaseStateException('Price mismatch in callback');
+        if (abs($post['payment_gross'] - $order->gatewayInitialAmount) > GatewayModule::MONEY_EPSILON) {
+            throw new InvalidDatabaseStateException('Price mismatch in callback');
+        }
+        // TODO: check the rest
 
         // Handle success
         $order->processPaymentReceived($post['txn_id'], $logId, $post['subscr_id'] ?? null);
